@@ -6,7 +6,7 @@ intents = discord.Intents.default() # Подключаем "Разрешения
 intents.message_content = True
 
 config = {
-    'token': 'MTA1MjI4NzIzNzE1NDQwNjU2MA.GpyLTu.Bd6hkIHtnC97xmPQDPMDfv7Oo6uPh1p7qAYyIw',
+    'token': '',
     'prefix': '$',
 }
 
