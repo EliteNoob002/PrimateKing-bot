@@ -15,7 +15,7 @@ bot = commands.Bot(command_prefix=config['prefix'], intents=intents)
 @bot.command()
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
 async def teste(ctx, *arg):
-    await ctx.reply(random.randint(0, 110))
+    await ctx.reply(random.randint(0, 105))
 
 @bot.command()
 @commands.has_role("Тест2")
