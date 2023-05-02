@@ -221,12 +221,13 @@ async def posl(ctx, member: discord.Member = None):
 @bot.tree.command(name="restartbot", description="Перезапуск бота")
 @commands.is_owner()
 async def restart(interaction: discord.Interaction):
+    await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправелена',
+    ephemeral=True) 
     client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
     stdin, stdout, stderr = client.exec_command('systemctl restart botdis.service')
     data = stdout.read().decode()
     stdin.close()
-    await interaction.response.send_message(f' Эй {interaction.user.mention}! Бот перезапущен. Ответ ssh: {data}',
-    ephemeral=True)        
+       
 
 @posl.error
 async def info_error(ctx, error): # если $послать юзер не найден
