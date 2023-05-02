@@ -16,3 +16,7 @@ host_ssh: #value
 user_ssh: #value
 password_ssh: #value
 port_ssh: #value
+
+#webhook
+webhook_dev: #value
+webhook_pk: #value

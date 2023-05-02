@@ -7,7 +7,8 @@ from bestconfig import Config
 import logging
 from discord import app_commands
 import myconnutils
-import paramiko 
+import paramiko
+from discord_webhook import DiscordWebhook 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -51,6 +52,10 @@ async def on_ready():
     except Exception as e:
         print(e)
     print('------')
+    webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
+    response = webhook1.execute()
+    webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
+    response = webhook2.execute()
 
 #@bot.command()
 #async def set(ctx):
@@ -221,7 +226,7 @@ async def posl(ctx, member: discord.Member = None):
 @bot.tree.command(name="restartbot", description="Перезапуск бота")
 @commands.is_owner()
 async def restart(interaction: discord.Interaction):
-    await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправелена',
+    await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
     ephemeral=True) 
     client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
     stdin, stdout, stderr = client.exec_command('systemctl restart botdis.service')
