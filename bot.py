@@ -7,6 +7,7 @@ from bestconfig import Config
 import logging
 from discord import app_commands
 import myconnutils
+import paramiko 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -27,16 +28,17 @@ client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
 
-#mydb = mysql.connector.connect(
-#    host=config['host'],
-#    user=config['user'],
-#    password=config['password'],
-#    database=config['database'],
-#)
+host_ssh = config['host_ssh']
+user_ssh = config['user_ssh']
+secret_ssh = config['password_ssh']
+port_ssh = config['port_ssh']
 
 connection = myconnutils.getConnection()    
 
 cursor = connection.cursor(dictionary=True) 
+
+client = paramiko.SSHClient()
+client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
@@ -66,7 +68,11 @@ async def hello(interaction: discord.Interaction):
 @bot.command()
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
 async def teste(ctx, *arg):
-    await ctx.reply(random.randint(0, 100))
+    client.connect(hostname=config['host_ssh'], username=config['user_ssh'], password=config['password_ssh'], port=config['port'])
+    stdin, stdout, stderr = client.exec_command('ls -l \n')
+    data = stdout.read() + stderr.read()
+    client.close()
+    await ctx.reply(f'Ответ ssh: {data}')
 
 @bot.command()
 @commands.has_role("Тест2")
@@ -211,6 +217,16 @@ async def posl(ctx, member: discord.Member = None):
             embed.set_thumbnail(url=ctx.author.avatar)
             await ctx.send(embed=embed) 
         connection.close()
+
+@bot.tree.command(name="restartbot", description="Перезапуск бота")
+@commands.is_owner()
+async def restart(interaction: discord.Interaction):
+    client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
+    stdin, stdout, stderr = client.exec_command('systemctl restart botdis.service')
+    data = stdout.read().decode()
+    stdin.close()
+    await interaction.response.send_message(f' Эй {interaction.user.mention}! Бот перезапущен. Ответ ssh: {data}',
+    ephemeral=True)        
 
 @posl.error
 async def info_error(ctx, error): # если $послать юзер не найден
