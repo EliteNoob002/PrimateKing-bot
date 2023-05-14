@@ -8,6 +8,7 @@ import logging
 from discord import app_commands
 import myconnutils
 import paramiko
+import time
 from discord_webhook import DiscordWebhook 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",
@@ -57,13 +58,6 @@ async def on_ready():
     webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
     response = webhook2.execute()
 
-#@bot.command()
-#async def set(ctx):
-#    val = (ctx.author.name, ctx.author.id, "0", "0")
-#    sql = (f"INSERT INTO `user` (name, id , count, admin) VALUES {val}")
-#    cursor.execute(sql)
-#    mydb.commit()
-#    await ctx.reply('done')
 
 @bot.tree.command(name="test", description="Тестовая слеш команда")
 async def hello(interaction: discord.Interaction):
@@ -224,15 +218,30 @@ async def posl(ctx, member: discord.Member = None):
         connection.close()
 
 @bot.tree.command(name="restartbot", description="Перезапуск бота")
-@commands.is_owner()
 async def restart(interaction: discord.Interaction):
-    await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
-    ephemeral=True) 
-    client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
-    stdin, stdout, stderr = client.exec_command('systemctl restart botdis.service')
-    data = stdout.read().decode()
-    stdin.close()
-       
+    if interaction.user.id == config['admin']:
+        await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
+        ephemeral=True) 
+        client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
+        stdin, stdout, stderr = client.exec_command('systemctl restart botdis.service')
+        data = stdout.read().decode()
+        stdin.close()
+    else:
+        await interaction.response.send_message(f'У тебя нет доступа к этой команде',
+        ephemeral=True) 
+
+@bot.tree.command(name="update", description="Обновление файлов бота")
+async def update(interaction: discord.Interaction):
+    if interaction.user.id == config['admin']:
+        client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
+        stdin, stdout, stderr = client.exec_command('cd PrimateKing-bot \n git pull')
+        data = stdout.read()
+        stdin.close()
+        await interaction.response.send_message(f' Эй {interaction.user.mention}! Вот результат {data}',
+        ephemeral=True) 
+    else:
+        await interaction.response.send_message(f'У тебя нет доступа к этой команде',
+        ephemeral=True) 
 
 @posl.error
 async def info_error(ctx, error): # если $послать юзер не найден

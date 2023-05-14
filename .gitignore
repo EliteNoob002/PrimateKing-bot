@@ -1,2 +1,4 @@
 sshtest.py
 config.yml
+py_log.log
+/__pycache__
