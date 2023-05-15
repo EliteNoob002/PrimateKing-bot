@@ -59,11 +59,11 @@ async def on_ready():
     response = webhook2.execute()
     while True:
         await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'очко', type = discord.ActivityType.playing))
-        await sleep(30)  
+        await sleep(config['time_sleep'])
         await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'как Артём дрочит на самокаты', type = discord.ActivityType.watching))
-        await sleep(30)    
+        await sleep(config['time_sleep'])
         await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'ахуенные истории от Артёма', type = discord.ActivityType.listening))
-        await sleep(30) 
+        await sleep(config['time_sleep'])
 
 @bot.tree.command(name="test", description="Тестовая слеш команда")
 async def hello(interaction: discord.Interaction):
@@ -241,7 +241,7 @@ async def update(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
         client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
         stdin, stdout, stderr = client.exec_command('cd PrimateKing-bot \n git pull')
-        data = stdout.read()
+        data = stdout.read().decode()
         stdin.close()
         await interaction.response.send_message(f' Эй {interaction.user.mention}! Вот результат {data}',
         ephemeral=True) 
