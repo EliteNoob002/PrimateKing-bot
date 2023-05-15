@@ -8,7 +8,7 @@ import logging
 from discord import app_commands
 import myconnutils
 import paramiko
-import time
+from asyncio import sleep 
 from discord_webhook import DiscordWebhook 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",
@@ -57,7 +57,13 @@ async def on_ready():
     response = webhook1.execute()
     webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
     response = webhook2.execute()
-
+    while True:
+        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'очко', type = discord.ActivityType.playing))
+        await sleep(30)  
+        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'как Артём дрочит на самокаты', type = discord.ActivityType.watching))
+        await sleep(30)    
+        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'ахуенные истории от Артёма', type = discord.ActivityType.listening))
+        await sleep(30) 
 
 @bot.tree.command(name="test", description="Тестовая слеш команда")
 async def hello(interaction: discord.Interaction):
