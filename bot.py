@@ -1,9 +1,8 @@
 import random
 import mysql.connector
-import bestconfig
 import discord
 from discord.ext import commands
-from bestconfig import Config
+import yaml
 import logging
 from discord import app_commands
 import myconnutils
@@ -21,7 +20,8 @@ logging.critical("A message of CRITICAL severity")
 
 description = '''PrimateKing'''
 
-config = Config() #config['version']
+with open("config.yml", encoding='utf-8') as f:
+    config = yaml.load(f, Loader=yaml.FullLoader,)
 
 
 intents = discord.Intents.default() # Подключаем "Разрешения"
@@ -58,11 +58,11 @@ async def on_ready():
     webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
     response = webhook2.execute()
     while True:
-        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'очко', type = discord.ActivityType.playing))
+        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
         await sleep(config['time_sleep'])
-        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'как Артём дрочит на самокаты', type = discord.ActivityType.watching))
+        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_watching']), type = discord.ActivityType.watching))
         await sleep(config['time_sleep'])
-        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = f'ахуенные истории от Артёма', type = discord.ActivityType.listening))
+        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_listening']), type = discord.ActivityType.listening))
         await sleep(config['time_sleep'])
 
 @bot.tree.command(name="test", description="Тестовая слеш команда")
