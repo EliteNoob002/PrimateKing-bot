@@ -35,10 +35,6 @@ user_ssh = config['user_ssh']
 secret_ssh = config['password_ssh']
 port_ssh = config['port_ssh']
 
-connection = myconnutils.getConnection()    
-
-cursor = connection.cursor(dictionary=True) 
-
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -84,7 +80,7 @@ async def teste(ctx, *arg):
 async def testl(ctx, *arg):
     await ctx.reply(random.randint(100, 200)) 
 
-@bot.tree.command(name="sas", description="тестовый sas")
+@bot.tree.command(name="sas", description="Хочешь посасать?")
 async def sas(interaction: discord.Interaction):
     author = interaction.user
     await interaction.response.send_message(f'{author.mention} соси') 
@@ -94,10 +90,13 @@ async def sas(interaction: discord.Interaction):
 async def say(ctx):
     await ctx.send('your code...')    
 
-@bot.command()
-async def count(ctx, member: discord.Member  = None):
-        if member == None:
-            member = ctx.author
+@bot.tree.command(name="count", description="Узнать сколько раз кто-то был послан на хуй")
+@app_commands.describe(target='Выберите цель')
+async def count(interaction: discord.Interaction, target: discord.Member):
+        connection = myconnutils.getConnection()
+        cursor = connection.cursor(dictionary=True)
+        if interaction.user == target:
+            member = interaction.user
             cursor.execute(f"SELECT id FROM user WHERE id = {member.id}")
             exist= cursor.fetchone()
             if exist is None:
@@ -106,7 +105,7 @@ async def count(ctx, member: discord.Member  = None):
                     color=0xff0000
                 )
                 embed.set_thumbnail(url=member.avatar)
-                await ctx.reply(embed=embed)
+                await interaction.response.send_message(embed=embed)
             else:    
                 cursor.execute(f'SELECT count FROM user WHERE id = {member.id}') 
                 count = cursor.fetchone()
@@ -116,53 +115,55 @@ async def count(ctx, member: discord.Member  = None):
                     color=0xff0000
                 )
                 embed.set_thumbnail(url=member.avatar)
-                await ctx.reply(embed=embed)
+                await interaction.response.send_message(embed=embed)
             connection.close()
-        elif member.id == config['bot_id']:
+        elif target.id == config['bot_id']:
                 embed = discord.Embed(
                     title=(f'Его невозможно послать'),
                     color=0xff0000
                 )
-                embed.set_thumbnail(url=member.avatar)
-                await ctx.reply(embed=embed)        
+                embed.set_thumbnail(url=target.avatar)
+                await interaction.response.send_message(embed=embed)        
         else:
-            cursor.execute(f"SELECT id FROM user WHERE id = {member.id}")
+            cursor.execute(f"SELECT id FROM user WHERE id = {target.id}")
             exist= cursor.fetchone()
             if exist is None:
                 embed = discord.Embed(
-                    title=(f'{member.name} ещё ни разу не был послан нахуй '),
+                    title=(f'{target.name} ещё ни разу не был послан нахуй '),
                     color=0xff0000
                 )
-                embed.set_thumbnail(url=member.avatar)
-                await ctx.reply(embed=embed)
+                embed.set_thumbnail(url=target.avatar)
+                await interaction.response.send_message(embed=embed)
             else:
-                cursor.execute(f'SELECT count FROM user WHERE id = {member.id}') 
+                cursor.execute(f'SELECT count FROM user WHERE id = {target.id}') 
                 count = cursor.fetchone()
                 count = count["count"]
                 embed = discord.Embed(
-                    title=(f'{member.name} был послан нахуй {count} раз'),
+                    title=(f'{target.name} был послан нахуй {count} раз'),
                     color=0xff0000
                 )
-                embed.set_thumbnail(url=member.avatar)
-                await ctx.reply(embed=embed)
-            connection.close()
+                embed.set_thumbnail(url=target.avatar)
+                await interaction.response.send_message(embed=embed)
 
-@bot.command()
-async def avatar(ctx, member: discord.Member  = None):
-    if member == None:#если не упоминать участника тогда выводит аватар автора сообщения
-        member = ctx.author
-    embed = discord.Embed(color = 0x22ff00, title = f"Аватар участника - {member.name}", description = f"[Нажмите что бы скачать аватар]({member.avatar})")
-    embed.set_image(url = member.avatar)
-    await ctx.send(embed = embed)      
+@bot.tree.command(name="avatar", description="С помощью это команды можно получить аватарку участников сервера")
+@app_commands.describe(target='Выберите цель')
+async def avatar(interaction: discord.Interaction, target: discord.Member):
+    if target == None:#если не упоминать участника тогда выводит аватар автора сообщения
+        target = interaction.user.id
+    embed = discord.Embed(color = 0x22ff00, title = f"Аватар участника - {target.name}", description = f"[Нажмите что бы скачать аватар]({target.avatar})")
+    embed.set_image(url = target.avatar)
+    await interaction.response.send_message(embed = embed)      
 
 @bot.event
 async def on_message(message): # при слове "primateking1488" посылае нахуй с упоминанием
     if 'primateking1488' in message.content.lower():
+        connection = myconnutils.getConnection()
+        cursor = connection.cursor(dictionary=True) 
         cursor.execute(f"SELECT id FROM user WHERE id = {message.author.id}")
         exist = cursor.fetchone()
         
         if exist is None:
-            val = (message.author.name, message.author.id, "1", "0")
+            val = (message.author.name, message.author.id, 1, "0")
             sql = (f"INSERT INTO `user` (name, id , count, admin) VALUES {val}")
             cursor.execute(sql)
             connection.commit()
@@ -177,36 +178,40 @@ async def on_message(message): # при слове "primateking1488" посыл�
             cursor.execute(sql,val)
             connection.commit()
             await message.channel.send(f'{message.author.mention} Пошёл нахуй!')
+        connection.close()
     await bot.process_commands(message)
 
-@bot.command()
-async def posl(ctx, member: discord.Member = None):
-    target_id = member.id
-    target_name = member.name
-    if member == None:
-            await ctx.reply('Еблан, ты никого не указал')
-    elif member.id == config['bot_id']:
+
+@bot.tree.command(name="poslat", description="Можно полать кого то на хуй")
+@app_commands.describe(target='Выберите цель')
+async def poslat(interaction: discord.Interaction, target: discord.Member):
+    connection = myconnutils.getConnection()
+    cursor = connection.cursor(dictionary=True) 
+    target_id = str(target.id)
+    target_name = target.name
+    if target.id == config['bot_id']:
             embed = discord.Embed(
                 title=(f'Не был послан нахуй'),
-                description=f"{ctx.author.mention} себя пошли нахуй",
+                description=f"{interaction.user.mention} себя пошли нахуй",
                 color=0xff0000
             )
-            embed.set_thumbnail(url=ctx.author.avatar)
-            await ctx.reply(embed=embed) 
+            embed.set_thumbnail(url=interaction.user.avatar)
+            await interaction.response.send_message(embed=embed) 
     else:
-        cursor.execute(f"SELECT id FROM user WHERE id = {target_id}")
+        sql_reality = f"SELECT id FROM user WHERE id = {target_id}"
+        cursor.execute(sql_reality)
         exist = cursor.fetchone()
         if exist is None:
-            val = (target_name, target_id, "1", "0")
+            val = (target_name, target_id, 1, "0")
             sql = (f"INSERT INTO `user` (name, id , count, admin) VALUES {val}")
             cursor.execute(sql)
             connection.commit()
             embed = discord.Embed(title=f"Вы были посланы нахуй",
-                        description=f"{member.mention} тебя послал {ctx.author.mention}",
+                        description=f"{target.mention} тебя послал {interaction.user.mention}",
                         color=0xff0000)  # Embed
-            embed.set_thumbnail(url=ctx.author.avatar)
+            embed.set_thumbnail(url=interaction.user.avatar)
             #await ctx.channel.send(f"{ctx.author.mention} послал {member.mention}") 
-            await ctx.send(embed=embed) 
+            await interaction.response.send_message(embed=embed) 
         else:
             cursor.execute(f'SELECT count FROM user WHERE id = {target_id}')
             count = cursor.fetchone()
@@ -217,11 +222,11 @@ async def posl(ctx, member: discord.Member = None):
             cursor.execute(sql)
             connection.commit()   
             embed = discord.Embed(title=f"Вы были посланы нахуй",
-                        description=f"{member.mention} тебя послал {ctx.author.mention}",
+                        description=f"{target.mention} тебя послал {interaction.user.mention}",
                         color=0xff0000)  # Embed
-            embed.set_thumbnail(url=ctx.author.avatar)
-            await ctx.send(embed=embed) 
-        connection.close()
+            embed.set_thumbnail(url=interaction.user.avatar)
+            await interaction.response.send_message(embed=embed)
+            connection.close() 
 
 @bot.tree.command(name="restartbot", description="Перезапуск бота")
 async def restart(interaction: discord.Interaction):
@@ -247,9 +252,15 @@ async def update(interaction: discord.Interaction):
         ephemeral=True) 
     else:
         await interaction.response.send_message(f'У тебя нет доступа к этой команде',
-        ephemeral=True) 
+        ephemeral=True)
 
-@posl.error
+@bot.tree.command(name="help", description="Список доступных команд")
+async def update(interaction: discord.Interaction):
+    embed = discord.Embed(color = 0x22ff00, title = f"Список доступных команд", description = f"/poslat - Послать кого-то на хуй \n /count - Узнать сколько раз кто-то был послан \n /avatar - Получить аватарку участиника сервера\n /sas - Бот предложит отсасать \n /help - Получить информацию о командах")
+    #embed.set_image(url = '')
+    await interaction.response.send_message(embed = embed)                 
+
+@poslat.error
 async def info_error(ctx, error): # если $послать юзер не найден
     if isinstance(error, commands.BadArgument):
         await ctx.reply('Такого долбоёба нет на сервере')
