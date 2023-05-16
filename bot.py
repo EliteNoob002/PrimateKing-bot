@@ -61,10 +61,6 @@ async def on_ready():
         await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_listening']), type = discord.ActivityType.listening))
         await sleep(config['time_sleep'])
 
-@bot.tree.command(name="test", description="Тестовая слеш команда")
-async def hello(interaction: discord.Interaction):
-    await interaction.response.send_message(f' Эй {interaction.user.mention}! Это тестовая слеш команда',
-    ephemeral=True)
 
 @bot.command()
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
@@ -145,7 +141,7 @@ async def count(interaction: discord.Interaction, target: discord.Member):
                 embed.set_thumbnail(url=target.avatar)
                 await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="avatar", description="С помощью это команды можно получить аватарку участников сервера")
+@bot.tree.command(name="avatar", description="С помощью этой команды можно получить аватарку участников сервера")
 @app_commands.describe(target='Выберите цель')
 async def avatar(interaction: discord.Interaction, target: discord.Member):
     if target == None:#если не упоминать участника тогда выводит аватар автора сообщения
