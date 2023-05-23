@@ -1,5 +1,4 @@
 import random
-import mysql.connector
 import discord
 from discord.ext import commands
 import yaml
@@ -54,13 +53,15 @@ async def on_ready():
     webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
     response = webhook2.execute()
     while True:
-        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
-        await sleep(config['time_sleep'])
-        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_watching']), type = discord.ActivityType.watching))
-        await sleep(config['time_sleep'])
-        await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_listening']), type = discord.ActivityType.listening))
-        await sleep(config['time_sleep'])
-
+        try:
+            await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
+            await sleep(config['time_sleep'])
+            await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_watching']), type = discord.ActivityType.watching))
+            await sleep(config['time_sleep'])
+            await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_listening']), type = discord.ActivityType.listening))
+            await sleep(config['time_sleep'])
+        except Exception as e:
+            logging.critical("Что-то отъебнуло в статусах", e)
 
 @bot.command()
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
@@ -181,8 +182,6 @@ async def on_message(message): # при слове "primateking1488" посыл�
 @bot.tree.command(name="poslat", description="Можно полать кого то на хуй")
 @app_commands.describe(target='Выберите цель')
 async def poslat(interaction: discord.Interaction, target: discord.Member):
-    connection = myconnutils.getConnection()
-    cursor = connection.cursor(dictionary=True) 
     target_id = str(target.id)
     target_name = target.name
     if target.id == config['bot_id']:
@@ -194,6 +193,8 @@ async def poslat(interaction: discord.Interaction, target: discord.Member):
             embed.set_thumbnail(url=interaction.user.avatar)
             await interaction.response.send_message(embed=embed) 
     else:
+        connection = myconnutils.getConnection()
+        cursor = connection.cursor(dictionary=True)         
         sql_reality = f"SELECT id FROM user WHERE id = {target_id}"
         cursor.execute(sql_reality)
         exist = cursor.fetchone()
@@ -202,7 +203,7 @@ async def poslat(interaction: discord.Interaction, target: discord.Member):
             sql = (f"INSERT INTO `user` (name, id , count, admin) VALUES {val}")
             cursor.execute(sql)
             connection.commit()
-            embed = discord.Embed(title=f"Вы были посланы нахуй",
+            embed = discord.Embed(title=f"{target.name} был послан нахуй",
                         description=f"{target.mention} тебя послал {interaction.user.mention}",
                         color=0xff0000)  # Embed
             embed.set_thumbnail(url=interaction.user.avatar)
@@ -217,7 +218,7 @@ async def poslat(interaction: discord.Interaction, target: discord.Member):
             sql = (f"UPDATE `user` SET count = {count} WHERE id = {target_id}")
             cursor.execute(sql)
             connection.commit()   
-            embed = discord.Embed(title=f"Вы были посланы нахуй",
+            embed = discord.Embed(title=f"{target.name} был послан нахуй",
                         description=f"{target.mention} тебя послал {interaction.user.mention}",
                         color=0xff0000)  # Embed
             embed.set_thumbnail(url=interaction.user.avatar)
