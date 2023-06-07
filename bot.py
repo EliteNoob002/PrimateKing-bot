@@ -7,7 +7,10 @@ from discord import app_commands
 import myconnutils
 import paramiko
 from asyncio import sleep 
-from discord_webhook import DiscordWebhook 
+from discord_webhook import DiscordWebhook
+import openai
+import asyncio
+
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -37,6 +40,9 @@ port_ssh = config['port_ssh']
 client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
+# Подключение к API OpenAI
+openai.api_key = config['openai_key']
+
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
 @bot.event
@@ -61,7 +67,7 @@ async def on_ready():
             await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_listening']), type = discord.ActivityType.listening))
             await sleep(config['time_sleep'])
         except Exception as e:
-            logging.critical("Что-то отъебнуло в статусах", e)
+            logging.critical("Что-то отъебнуло в статусах ", e)
 
 @bot.command()
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
@@ -252,10 +258,36 @@ async def update(interaction: discord.Interaction):
         ephemeral=True)
 
 @bot.tree.command(name="help", description="Список доступных команд")
-async def update(interaction: discord.Interaction):
+async def help(interaction: discord.Interaction):
     embed = discord.Embed(color = 0x22ff00, title = f"Список доступных команд", description = f"/poslat - Послать кого-то на хуй \n /count - Узнать сколько раз кто-то был послан \n /avatar - Получить аватарку участиника сервера\n /sas - Бот предложит отсасать \n /help - Получить информацию о командах")
     #embed.set_image(url = '')
-    await interaction.response.send_message(embed = embed)                 
+    await interaction.response.send_message(embed = embed)  
+
+@bot.tree.command(name="gpt", description="GPT Запрос")
+@app_commands.describe(user_input='Введите запрос')
+async def gpt(interaction: discord.Interaction, user_input: str):
+
+    # Генерация ответа с помощью GPT модели
+    await interaction.response.defer()
+    # Определите параметры запроса для GPT модели
+    prompt = f"User: {user_input}\nAI: "
+    temperature = 1  # Параметр температуры для вариации ответов
+    
+    # Запрос к GPT модели
+    response = openai.Completion.create(
+        engine='text-davinci-003',
+        prompt=prompt,
+        max_tokens= 2000,
+        temperature=temperature,
+        n=1,
+        stop=None
+    )
+    await asyncio.sleep(4)
+    # Извлечение ответа из ответа модели
+    model_response = response.choices[0].text.strip()
+    # Отправка ответа в тот же канал
+    await interaction.followup.send(model_response)  
+
 
 @poslat.error
 async def info_error(ctx, error): # если $послать юзер не найден
