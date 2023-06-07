@@ -286,7 +286,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
     # Извлечение ответа из ответа модели
     model_response = response.choices[0].text.strip()
     # Отправка ответа в тот же канал
-    await interaction.followup.send(model_response)  
+    await interaction.followup.send(f'> {interaction.user.mention} спросил:\n> {user_input}\n\n {model_response}')  
 
 
 @poslat.error
