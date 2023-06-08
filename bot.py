@@ -270,21 +270,24 @@ async def gpt(interaction: discord.Interaction, user_input: str):
     # Генерация ответа с помощью GPT модели
     await interaction.response.defer()
     # Определите параметры запроса для GPT модели
-    prompt = f"User: {user_input}\nAI: "
     temperature = 1  # Параметр температуры для вариации ответов
     
     # Запрос к GPT модели
-    response = openai.Completion.create(
-        engine='text-davinci-003',
-        prompt=prompt,
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+          {"role": "system", "content": "Ты дружелюбный помощник."},
+          {"role": "user", "content": f"{user_input}"}
+            ],
+
         max_tokens= 2000,
         temperature=temperature,
         n=1,
         stop=None
     )
-    await asyncio.sleep(4)
+    await asyncio.sleep(1)
     # Извлечение ответа из ответа модели
-    model_response = response.choices[0].text.strip()
+    model_response = response.choices[0].message.content.strip()
     # Отправка ответа в тот же канал
     await interaction.followup.send(f'> {interaction.user.mention} спросил:\n> {user_input}\n\n {model_response}')  
 
