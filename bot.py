@@ -12,7 +12,7 @@ import openai
 import asyncio
 
 
-logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",
+logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
 logging.debug("A DEBUG Message")
 logging.info("An INFO")
@@ -86,6 +86,7 @@ async def testl(ctx, *arg):
 @bot.tree.command(name="sas", description="Хочешь посасать?")
 async def sas(interaction: discord.Interaction):
     author = interaction.user
+    logging.info(f'{author.mention} {author.name} использовал команду sas')
     await interaction.response.send_message(f'{author.mention} соси') 
 
 @bot.command(pass_context = True) #только admin
@@ -96,6 +97,7 @@ async def say(ctx):
 @bot.tree.command(name="count", description="Узнать сколько раз кто-то был послан на хуй")
 @app_commands.describe(target='Выберите цель')
 async def count(interaction: discord.Interaction, target: discord.Member):
+        logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду count')
         connection = myconnutils.getConnection()
         cursor = connection.cursor(dictionary=True)
         if interaction.user == target:
@@ -151,6 +153,7 @@ async def count(interaction: discord.Interaction, target: discord.Member):
 @bot.tree.command(name="avatar", description="С помощью этой команды можно получить аватарку участников сервера")
 @app_commands.describe(target='Выберите цель')
 async def avatar(interaction: discord.Interaction, target: discord.Member):
+    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду avatar')
     if target == None:#если не упоминать участника тогда выводит аватар автора сообщения
         target = interaction.user.id
     embed = discord.Embed(color = 0x22ff00, title = f"Аватар участника - {target.name}", description = f"[Нажмите что бы скачать аватар]({target.avatar})")
@@ -188,6 +191,7 @@ async def on_message(message): # при слове "primateking1488" посыл�
 @bot.tree.command(name="poslat", description="Можно полать кого то на хуй")
 @app_commands.describe(target='Выберите цель')
 async def poslat(interaction: discord.Interaction, target: discord.Member):
+    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду poslat')
     target_id = str(target.id)
     target_name = target.name
     if target.id == config['bot_id']:
@@ -234,6 +238,7 @@ async def poslat(interaction: discord.Interaction, target: discord.Member):
 @bot.tree.command(name="restartbot", description="Перезапуск бота")
 async def restart(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
+        logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду restartbot')
         await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
         ephemeral=True) 
         client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
@@ -241,12 +246,14 @@ async def restart(interaction: discord.Interaction):
         data = stdout.read().decode()
         stdin.close()
     else:
+        logging.info(f'{interaction.user.mention} {interaction.user.name} попытался ипользовать команду restart')
         await interaction.response.send_message(f'У тебя нет доступа к этой команде',
         ephemeral=True) 
 
 @bot.tree.command(name="update", description="Обновление файлов бота")
 async def update(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
+        logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду update')
         client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
         stdin, stdout, stderr = client.exec_command('cd PrimateKing-bot \n git pull')
         data = stdout.read().decode()
@@ -254,11 +261,13 @@ async def update(interaction: discord.Interaction):
         await interaction.response.send_message(f' Эй {interaction.user.mention}! Вот результат {data}',
         ephemeral=True) 
     else:
+        logging.info(f'{interaction.user.mention} {interaction.user.name} попытался ипользовать команду update')
         await interaction.response.send_message(f'У тебя нет доступа к этой команде',
         ephemeral=True)
 
 @bot.tree.command(name="help", description="Список доступных команд")
 async def help(interaction: discord.Interaction):
+    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду help')
     embed = discord.Embed(color = 0x22ff00, title = f"Список доступных команд", description = f"/poslat - Послать кого-то на хуй \n /count - Узнать сколько раз кто-то был послан \n /avatar - Получить аватарку участиника сервера\n /sas - Бот предложит отсасать \n /help - Получить информацию о командах")
     #embed.set_image(url = '')
     await interaction.response.send_message(embed = embed)  
@@ -266,6 +275,7 @@ async def help(interaction: discord.Interaction):
 @bot.tree.command(name="gpt", description="GPT Запрос")
 @app_commands.describe(user_input='Введите запрос')
 async def gpt(interaction: discord.Interaction, user_input: str):
+    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду gpt')
 
     # Генерация ответа с помощью GPT модели
     await interaction.response.defer()
