@@ -268,7 +268,7 @@ async def update(interaction: discord.Interaction):
 @bot.tree.command(name="help", description="Список доступных команд")
 async def help(interaction: discord.Interaction):
     logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду help')
-    embed = discord.Embed(color = 0x22ff00, title = f"Список доступных команд", description = f"/poslat - Послать кого-то на хуй \n /count - Узнать сколько раз кто-то был послан \n /avatar - Получить аватарку участиника сервера\n /sas - Бот предложит отсасать \n /help - Получить информацию о командах")
+    embed = discord.Embed(color = 0x22ff00, title = f"Список доступных команд", description = f"/poslat - Послать кого-то на хуй \n /count - Узнать сколько раз кто-то был послан \n /avatar - Получить аватарку участиника сервера\n /sas - Бот предложит отсасать \n /help - Получить информацию о командах \n /send_blin - Отправить блин с говном")
     #embed.set_image(url = '')
     await interaction.response.send_message(embed = embed)  
 
@@ -277,29 +277,64 @@ async def help(interaction: discord.Interaction):
 async def gpt(interaction: discord.Interaction, user_input: str):
     logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду gpt')
 
-    # Генерация ответа с помощью GPT модели
-    await interaction.response.defer()
-    # Определите параметры запроса для GPT модели
-    temperature = 1  # Параметр температуры для вариации ответов
-    
-    # Запрос к GPT модели
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-          {"role": "system", "content": "Ты дружелюбный помощник."},
-          {"role": "user", "content": f"{user_input}"}
-            ],
+    try:
+        # Генерация ответа с помощью GPT модели
+        await interaction.response.defer()
+        # Определите параметры запроса для GPT модели
+        temperature = 1  # Параметр температуры для вариации ответов
+        
+        # Запрос к GPT модели
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+            {"role": "system", "content": "Ты дружелюбный помощник."},
+            {"role": "user", "content": f"{user_input}"}
+                ],
 
-        max_tokens= 2000,
-        temperature=temperature,
-        n=1,
-        stop=None
-    )
-    await asyncio.sleep(1)
-    # Извлечение ответа из ответа модели
-    model_response = response.choices[0].message.content.strip()
-    # Отправка ответа в тот же канал
-    await interaction.followup.send(f'> {interaction.user.mention} спросил:\n> {user_input}\n\n {model_response}')  
+            max_tokens= 2000,
+            temperature=temperature,
+            n=1,
+            stop=None
+        )
+        await asyncio.sleep(1)
+        # Извлечение ответа из ответа модели
+        model_response = response.choices[0].message.content.strip()
+        # Отправка ответа в тот же канал
+        await interaction.followup.send(f'> {interaction.user.mention} спросил:\n> {user_input}\n\n {model_response}')
+    except Exception as e:
+        logging.error(f'Ошибка выполения команды gpt. Текст ошибки: {e}')
+        await interaction.followup.send(f'Возникла ошибка при выполнении команды', ephemeral=True)  
+
+
+# Функция, отправки сообщения
+async def send_blin(target_user: discord.User, channel: discord.TextChannel, user: discord.User,):
+    logging.info(f'Выполнение функции send_blin начато')
+    try:
+        await channel.send(content=f'{target_user.mention}, вам пришёл блин с говном от {user.mention} ')
+
+        embed = discord.Embed()
+        embed.set_image(url=random.choice(config['pancake_url']))
+        await channel.send(embed=embed)
+    except Exception as e:
+        logging.error("Ошибка при выполнении функции send_blin ", e)
+        
+    logging.info(f'Функция send_blin выполнена')
+
+@bot.tree.command(name="send_blin", description="Отправить блин с говном")
+async def send_message_command(interaction: discord.Interaction, target: discord.User):
+    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду send_blin. Цель: {target.mention} {target.name}')
+    # Получение канала, откуда была вызвана команда
+    channel = interaction.channel
+    user = interaction.user
+
+    # Выполнение функции отправки сообщения
+    await send_blin(target, channel, user)
+    
+    
+    # Уведомление пользователя о завершении
+    await interaction.response.send_message(f'Посылка для {target.mention} доставлена', ephemeral=True)
+    logging.info(f'Комманда send_blin выполнена')
+    
 
 
 @poslat.error
