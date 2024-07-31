@@ -9,6 +9,8 @@ import paramiko
 from asyncio import sleep 
 from discord_webhook import DiscordWebhook
 from openai import AsyncOpenAI
+from typing import Optional
+import aiohttp
 import asyncio
 
 
@@ -56,10 +58,10 @@ async def on_ready():
     except Exception as e:
         print(e)
     print('------')
-    webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
-    response = webhook1.execute()
-    webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
-    response = webhook2.execute()
+    #webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
+    #response = webhook1.execute()
+    #webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
+    #response = webhook2.execute()
     while True:
         try:
             await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
@@ -286,13 +288,14 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         temperature = 1  # Параметр температуры для вариации ответов
         
         # Запрос к GPT модели
-        response = client.completions.create(
+        response = await client.completions.create(
             model="gpt-3.5-turbo",
-            messages=[
+            prompt=[
             {"role": "system", "content": "Ты дружелюбный помощник."},
             {"role": "user", "content": f"{user_input}"}
                 ],
-
+            
+            stream=True,
             max_tokens= 2000,
             temperature=temperature,
             n=1,
@@ -300,41 +303,72 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         )
         await asyncio.sleep(1)
         # Извлечение ответа из ответа модели
-        model_response = response.choices[0].message.content.strip()
+        async for completions in response:
+            model_response = completions.choices[0].message.content.strip()
         # Отправка ответа в тот же канал
         await interaction.followup.send(f'> {interaction.user.mention} спросил:\n> {user_input}\n\n {model_response}')
     except Exception as e:
         logging.error(f'Ошибка выполения команды gpt. Текст ошибки: {e}')
         await interaction.followup.send(f'Возникла ошибка при выполнении команды', ephemeral=True)  
 
+async def check_image(url: str) -> bool:
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url) as response:
+                return response.status == 200
+        except Exception as e:
+            logging.error(f"Ошибка при проверке изображения: {e}")
+            return False
+
 
 # Функция, отправки сообщения
-async def send_blin(target_user: discord.User, channel: discord.TextChannel, user: discord.User,):
+async def send_blin(target_user: discord.User, channel: discord.TextChannel, user: discord.User, text: Optional[str] = None):
     logging.info(f'Выполнение функции send_blin начато')
     try:
+        image_url = random.choice(config['pancake_url'])
+
+        if not await check_image(image_url):
+            raise ValueError(f"Картинка блина по URL не доступна")
+            
+    
         await channel.send(content=f'{target_user.mention}, вам пришёл блин с говном от {user.mention} ')
 
         embed = discord.Embed()
-        embed.set_image(url=random.choice(config['pancake_url']))
+        embed.set_image(url=image_url)
+        if text:
+            embed.set_footer(text=text)
         await channel.send(embed=embed)
     except Exception as e:
-        logging.error("Ошибка при выполнении функции send_blin ", e)
+        if ValueError:
+            logging.error(f'Картинка блина по URL {image_url} не доступна')
+        else:
+            logging.error("Ошибка при выполнении функции send_blin ", exc_info=True)
+        raise
         
     logging.info(f'Функция send_blin выполнена')
 
 @bot.tree.command(name="send_blin", description="Отправить блин с говном")
-async def send_message_command(interaction: discord.Interaction, target: discord.User):
-    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду send_blin. Цель: {target.mention} {target.name}')
+@app_commands.describe(target='Выберите цель')
+@app_commands.describe(text='Сообщение под картинкой. Необязательно')
+async def send_message_command(interaction: discord.Interaction, target: discord.User, text: Optional[str] = None):
+    if text:
+        logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду send_blin. Цель: {target.mention} {target.name}. Сообщение {text}')
+    else:
+        logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду send_blin. Цель: {target.mention} {target.name}')
     # Получение канала, откуда была вызвана команда
     channel = interaction.channel
     user = interaction.user
 
-    # Выполнение функции отправки сообщения
-    await send_blin(target, channel, user)
-    
-    
-    # Уведомление пользователя о завершении
-    await interaction.response.send_message(f'Посылка для {target.mention} доставлена', ephemeral=True)
+    try:
+        # Выполнение функции отправки сообщения
+        await send_blin(target, channel, user, text)
+        await interaction.response.send_message(f'Посылка для {target.mention} доставлена', ephemeral=True)
+    except ValueError as e:
+        await interaction.response.send_message(f'Ошибка: {e}', ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f'Произошла ошибка при отправке блина', ephemeral=True)
+        logging.error(f'Произошла ошибка: {e}')
+
     logging.info(f'Комманда send_blin выполнена')
     
 
