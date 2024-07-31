@@ -39,11 +39,11 @@ user_ssh = config['user_ssh']
 secret_ssh = config['password_ssh']
 port_ssh = config['port_ssh']
 
-client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+client_ssh = paramiko.SSHClient()
+client_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 # Подключение к API OpenAI
-client = AsyncOpenAI(
+client_openai = AsyncOpenAI(
   api_key=config['openai_key'],
 )
 
@@ -58,10 +58,10 @@ async def on_ready():
     except Exception as e:
         print(e)
     print('------')
-    #webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
-    #response = webhook1.execute()
-    #webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
-    #response = webhook2.execute()
+    webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
+    response = webhook1.execute()
+    webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
+    response = webhook2.execute()
     while True:
         try:
             await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
@@ -76,10 +76,10 @@ async def on_ready():
 @bot.command()
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
 async def teste(ctx, *arg):
-    client.connect(hostname=config['host_ssh'], username=config['user_ssh'], password=config['password_ssh'], port=config['port'])
+    client_ssh.connect(hostname=config['host_ssh'], username=config['user_ssh'], password=config['password_ssh'], port=config['port'])
     stdin, stdout, stderr = client.exec_command('ls -l \n')
     data = stdout.read() + stderr.read()
-    client.close()
+    client_ssh.close()
     await ctx.reply(f'Ответ ssh: {data}')
 
 @bot.command()
@@ -245,8 +245,8 @@ async def restart(interaction: discord.Interaction):
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду restartbot')
         await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
         ephemeral=True) 
-        client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
-        stdin, stdout, stderr = client.exec_command('systemctl restart botdis.service')
+        client_ssh.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
+        stdin, stdout, stderr = client_ssh.exec_command('systemctl restart botdis.service')
         data = stdout.read().decode()
         stdin.close()
     else:
@@ -258,8 +258,8 @@ async def restart(interaction: discord.Interaction):
 async def update(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду update')
-        client.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
-        stdin, stdout, stderr = client.exec_command('cd PrimateKing-bot \n git pull')
+        client_ssh.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
+        stdin, stdout, stderr = client_ssh.exec_command('cd PrimateKing-bot \n git pull')
         data = stdout.read().decode()
         stdin.close()
         await interaction.response.send_message(f' Эй {interaction.user.mention}! Вот результат {data}',
@@ -288,7 +288,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         temperature = 1  # Параметр температуры для вариации ответов
         
         # Запрос к GPT модели
-        response = await client.completions.create(
+        response = await client_openai.completions.create(
             model="gpt-3.5-turbo",
             prompt=[
             {"role": "system", "content": "Ты дружелюбный помощник."},
