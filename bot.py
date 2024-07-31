@@ -8,7 +8,7 @@ import myconnutils
 import paramiko
 from asyncio import sleep 
 from discord_webhook import DiscordWebhook
-import openai
+from openai import AsyncOpenAI
 import asyncio
 
 
@@ -41,7 +41,9 @@ client = paramiko.SSHClient()
 client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 # Подключение к API OpenAI
-openai.api_key = config['openai_key']
+client = AsyncOpenAI(
+  api_key=config['openai_key'],
+)
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
@@ -284,7 +286,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         temperature = 1  # Параметр температуры для вариации ответов
         
         # Запрос к GPT модели
-        response = openai.ChatCompletion.create(
+        response = client.completions.create(
             model="gpt-3.5-turbo",
             messages=[
             {"role": "system", "content": "Ты дружелюбный помощник."},
