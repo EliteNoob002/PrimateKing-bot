@@ -2,3 +2,5 @@ sshtest.py
 config.yml
 py_log.log
 /__pycache__
+/gpt_img
+/gpt_img_temp

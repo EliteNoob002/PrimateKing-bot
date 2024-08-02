@@ -12,7 +12,8 @@ from openai import AsyncOpenAI
 from typing import Optional
 import aiohttp
 import asyncio
-
+import yandexgpt
+import yandexgptart
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -279,37 +280,49 @@ async def help(interaction: discord.Interaction):
 @bot.tree.command(name="gpt", description="GPT Запрос")
 @app_commands.describe(user_input='Введите запрос')
 async def gpt(interaction: discord.Interaction, user_input: str):
-    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду gpt')
+    user = interaction.user
 
     try:
-        # Генерация ответа с помощью GPT модели
-        await interaction.response.defer()
-        # Определите параметры запроса для GPT модели
-        temperature = 1  # Параметр температуры для вариации ответов
-        
-        # Запрос к GPT модели
-        response = await client_openai.completions.create(
-            model="gpt-3.5-turbo",
-            prompt=[
-            {"role": "system", "content": "Ты дружелюбный помощник."},
-            {"role": "user", "content": f"{user_input}"}
-                ],
-            
-            stream=True,
-            max_tokens= 2000,
-            temperature=temperature,
-            n=1,
-            stop=None
-        )
-        await asyncio.sleep(1)
-        # Извлечение ответа из ответа модели
-        async for completions in response:
-            model_response = completions.choices[0].message.content.strip()
-        # Отправка ответа в тот же канал
-        await interaction.followup.send(f'> {interaction.user.mention} спросил:\n> {user_input}\n\n {model_response}')
+        # Выполнение функции отправки сообщения
+        await interaction.response.defer(ephemeral=True)
+        answer = await yandexgpt.yandexgpt(user_input)
+        if len(answer) > 2000:
+            parts = [answer[i:i+2000] for i in range(0, len(answer), 2000)]
+            for part in parts:
+                await interaction.followup.send(part)
+        else:
+            await interaction.followup.send(f'Ответ GPT: \n\n{answer}')
     except Exception as e:
-        logging.error(f'Ошибка выполения команды gpt. Текст ошибки: {e}')
-        await interaction.followup.send(f'Возникла ошибка при выполнении команды', ephemeral=True)  
+        await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT')
+        logging.error(f'Произошла ошибка при обращении к функции YandexGPT: {e}')
+
+@bot.tree.command(name="gpt_art", description="Генерация картинки")
+@app_commands.describe(user_input='Введите промт')
+async def gpt(interaction: discord.Interaction, user_input: str):
+    user = interaction.user.name
+
+    try:
+        # Выполнение функции отправки сообщения
+        await interaction.response.defer()
+        gpt_img = await yandexgptart.generate_and_save_image(user_input, user)
+        
+        # Создание Embed объекта с описанием
+        embed = discord.Embed(
+            title="Сгенерированное изображение",
+            description="Вот изображение, созданное на основе вашего запроса:",
+            color=discord.Color.blue()  # Опционально: установите цвет для Embed
+        )
+        embed.set_image(url=gpt_img)
+
+        await interaction.followup.send(embed=embed)
+    except Exception as e:
+        if ValueError:
+            await interaction.followup.send(f'Возникла ошибка при получении URL изображения')
+            logging.error(f'{ValueError}')
+        else:
+            await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT ART')
+            logging.error(f'Произошла ошибка при обращении к функции YandexGPT ART: {e}')
+        raise
 
 async def check_image(url: str) -> bool:
     async with aiohttp.ClientSession() as session:
