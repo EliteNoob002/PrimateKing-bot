@@ -59,10 +59,10 @@ async def on_ready():
     except Exception as e:
         print(e)
     print('------')
-    #webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
-    #response = webhook1.execute()
-    #webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
-    #response = webhook2.execute()
+    webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
+    response = webhook1.execute()
+    webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
+    response = webhook2.execute()
     while True:
         try:
             await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
