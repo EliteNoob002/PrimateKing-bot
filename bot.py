@@ -284,7 +284,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
 
     try:
         # Выполнение функции отправки сообщения
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         answer = await yandexgpt.yandexgpt(user_input)
         if len(answer) > 2000:
             parts = [answer[i:i+2000] for i in range(0, len(answer), 2000)]
