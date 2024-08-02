@@ -304,6 +304,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
     try:
         # Выполнение функции отправки сообщения
         await interaction.response.defer()
+        logging.info(f"Начата выполение цепочки для генерации картинки. Промпт: {user_input}")
         gpt_img = await yandexgptart.generate_and_save_image(user_input, user)
         
         # Создание Embed объекта с описанием
