@@ -291,7 +291,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
             for part in parts:
                 await interaction.followup.send(part)
         else:
-            await interaction.followup.send(f'{user.mention} спросил "{user_input}\n\n"Ответ GPT: \n\n{answer}')
+            await interaction.followup.send(f'{user.mention} спросил "{user_input}"\n\nОтвет GPT: \n\n{answer}')
     except Exception as e:
         await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT')
         logging.error(f'Произошла ошибка при обращении к функции YandexGPT: {e}')
