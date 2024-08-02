@@ -6,10 +6,10 @@ import logging
 import random
 from datetime import datetime
 import os
+import json
 
 with open("config.yml", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
-
 
 url_generate = "https://llm.api.cloud.yandex.net/foundationModels/v1/imageGenerationAsync"
 headers = {
@@ -17,30 +17,32 @@ headers = {
     "Authorization": f"Api-Key {config['yandex_api_key']}"
 }
 
-
 async def post_image_generation(session, user_input):
     data = {
-    "modelUri": f"art://{config['folder_id']}/yandex-art/latest",
-    "generationOptions": {
-        "seed": str(random.randint(0, 2**63 - 1)),
-        "aspectRatio": {
-            "widthRatio": "1",
-            "heightRatio": "1"
-        }
-    },
-    "messages": [
-        {
-            "weight": "1",
-            "text": user_input
-        }
-    ]
-}
+        "modelUri": f"art://{config['folder_id']}/yandex-art/latest",
+        "generationOptions": {
+            "seed": str(random.randint(0, 2**63 - 1)),
+            "aspectRatio": {
+                "widthRatio": "1",
+                "heightRatio": "1"
+            }
+        },
+        "messages": [
+            {
+                "weight": "1",
+                "text": user_input
+            }
+        ]
+    }
     async with session.post(url_generate, headers=headers, json=data) as response:
+        response_json = await response.json()  # Awaiting the response JSON
         if response.status == 200:
-            answer_nonformat = await response.json()
-            answer_id = answer_nonformat["id"]
+            answer_id = response_json["id"]
             logging.info(f'id запроса для генерации картинки получен')
             return answer_id
+        elif 'error' in response_json and response_json['error'] == "it is not possible to generate an image from this request because it may violate the terms of use":
+            logging.info(f'Промт не прошёл проверку Яндекса')
+            return False
         else:
             logging.error(f"Ошибка POST запроса yandexgpt ART API. Код ошибки: {response.status}, Текст: {await response.text()}")
             return None
@@ -88,13 +90,12 @@ async def upload_to_server(file_path):
                     logging.error(f'Ошибка при загрузке файла на сервер. Код ошибки: {response.status}')
                     return False
 
-
 async def generate_and_save_image(user_input, user):
     async with aiohttp.ClientSession() as session:
         # Отправка запроса на генерацию изображения
-        operation_id = await post_image_generation(session , user_input)
+        operation_id = await post_image_generation(session, user_input)
         if not operation_id:
-            return None
+            raise Exception("Промт не проходит проверку Яндекса")
         
         # Цикл проверки состояния операции
         while True:

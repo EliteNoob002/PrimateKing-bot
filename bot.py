@@ -59,10 +59,10 @@ async def on_ready():
     except Exception as e:
         print(e)
     print('------')
-    webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
-    response = webhook1.execute()
-    webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
-    response = webhook2.execute()
+    #webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
+    #response = webhook1.execute()
+    #webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
+    #response = webhook2.execute()
     while True:
         try:
             await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
@@ -295,7 +295,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
     except Exception as e:
         await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT')
         logging.error(f'Произошла ошибка при обращении к функции YandexGPT: {e}')
-
+        
 @bot.tree.command(name="gpt_art", description="Генерация картинки")
 @app_commands.describe(user_input='Введите промт')
 async def gpt(interaction: discord.Interaction, user_input: str):
@@ -316,13 +316,15 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         embed.set_image(url=gpt_img)
 
         await interaction.followup.send(embed=embed)
+    except ValueError as ve:
+        await interaction.followup.send(f'Возникла ошибка при получении URL изображения: {str(ve)}')
+        logging.error(f'{str(ve)}')
     except Exception as e:
-        if ValueError:
-            await interaction.followup.send(f'Возникла ошибка при получении URL изображения')
-            logging.error(f'{ValueError}')
+        if str(e) == "Промт не проходит проверку Яндекса":
+            await interaction.followup.send(f'Промт не проходит проверку Яндекса')
         else:
-            await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT ART')
-            logging.error(f'Произошла ошибка при обращении к функции YandexGPT ART: {e}')
+            await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT ART: {str(e)}')
+            logging.error(f'Произошла ошибка при обращении к функции YandexGPT ART: {str(e)}')
         raise
 
 async def check_image(url: str) -> bool:
