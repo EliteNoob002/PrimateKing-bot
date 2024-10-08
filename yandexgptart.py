@@ -74,13 +74,14 @@ async def save_image(image_base64, user):
     logging.info(f'Сгенерированная картинка успешно сохранена')
     return image_path
 
-async def upload_to_server(file_path):
+async def upload_to_server(file_path, user):
     url = f"{config['upload_url']}"  # URL на ваш Nginx сервер
     async with aiohttp.ClientSession() as session:
         with open(file_path, 'rb') as file:
             original_filename = os.path.basename(file_path)
             data = aiohttp.FormData()
             data.add_field('file', file, filename=original_filename)
+            data.add_field('Username', user)
             async with session.post(url, data=data) as response:
                 if response.status == 200:
                     response_data = await response.json()
@@ -105,7 +106,7 @@ async def generate_and_save_image(user_input, user):
                 image_path = await save_image(image_base64, user)
                 
                 # Загрузка изображения на сервер
-                image_url = await upload_to_server(image_path)
+                image_url = await upload_to_server(image_path, user)
                 
                 if not image_url:
                     raise ValueError("Возникла ошибка при получении URL изображения")
