@@ -85,8 +85,9 @@ async def upload_to_server(file_path, user):
             async with session.post(url, data=data) as response:
                 if response.status == 200:
                     response_data = await response.json()
-                    logging.info(f'Файл {response_data.get('file_url')} сохранен на сервере')
-                    return response_data.get('file_url')  # Предполагается, что сервер возвращает URL
+                    file_url = response_data.get('file_url')
+                    logging.info(f'Файл {file_url} сохранен на сервере')
+                    return file_url # Предполагается, что сервер возвращает URL
                 else:
                     logging.error(f'Ошибка при загрузке файла на сервер. Код ошибки: {response.status}')
                     return False
