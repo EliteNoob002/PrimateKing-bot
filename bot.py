@@ -68,23 +68,27 @@ class ImageView(discord.ui.View):
     # Кнопка будет на новой строке (ряд 1)
     @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red, row=1)
     async def regenerate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Логика повторной генерации изображения
-        await interaction.response.defer()
-        logging.info(f"Повторная генерация картинки по промту: {self.prompt}")
-        
-        # Повторная генерация изображения
-        new_gpt_img = await yandexgptart.generate_and_save_image(self.prompt, interaction.user.name)
+        try:
+            # Логика повторной генерации изображения
+            await interaction.response.defer()
+            logging.info(f"Повторная генерация картинки по промту: {self.prompt}")
+            
+            # Повторная генерация изображения
+            new_gpt_img = await yandexgptart.generate_and_save_image(self.prompt, interaction.user.name)
 
-        # Создание нового Embed объекта
-        new_embed = discord.Embed(
-            title="Сгенерированное изображение",
-            description="Вот изображение, созданное на основе вашего запроса:",
-            color=discord.Color.blue()
-        )
-        new_embed.set_image(url=new_gpt_img)
+            # Создание нового Embed объекта
+            new_embed = discord.Embed(
+                title="Сгенерированное изображение",
+                description="Вот изображение, созданное на основе вашего запроса:",
+                color=discord.Color.blue()
+            )
+            new_embed.set_image(url=new_gpt_img)
 
-        # Отправка нового сообщения
-        await interaction.followup.send(embed=new_embed, view=ImageView(new_gpt_img, self.prompt))
+            # Отправка нового сообщения
+            await interaction.followup.send(embed=new_embed, view=ImageView(new_gpt_img, self.prompt))
+        except Exception as e:
+            # Логирование ошибки
+            logging.error(f"Произошла ошибка при повторной генерации изображения: {str(e)}")
 
 @bot.event
 async def on_ready():
