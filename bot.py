@@ -69,18 +69,15 @@ class ImageView(discord.ui.View):
     @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red, row=1)
     async def regenerate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
-            # Отправляем defer, чтобы показать, что процесс выполняется
-            await interaction.response.defer()
-            
-            # Отправляем сообщение, чтобы показать процесс генерации
-            await interaction.followup.send("Генерация изображения, пожалуйста, подождите...")
+            # Отправляем временное сообщение с уведомлением о процессе генерации
+            await interaction.response.send_message("Генерация изображения, пожалуйста, подождите...", ephemeral=True)
 
             logging.info(f"Повторная генерация картинки по промту: {self.prompt}")
 
             # Повторная генерация изображения
             new_gpt_img = await yandexgptart.generate_and_save_image(self.prompt, interaction.user.name)
 
-            # Создание нового Embed объекта
+            # Создание нового Embed объекта с новым изображением
             new_embed = discord.Embed(
                 title="Сгенерированное изображение",
                 description="Вот изображение, созданное на основе вашего запроса:",
@@ -88,12 +85,15 @@ class ImageView(discord.ui.View):
             )
             new_embed.set_image(url=new_gpt_img)
 
-            # Отправка нового сообщения с изображением
+            # Отправляем новое сообщение с изображением (старое сообщение остаётся нетронутым)
             await interaction.followup.send(embed=new_embed, view=ImageView(new_gpt_img, self.prompt))
 
         except Exception as e:
             # Логирование ошибки
             logging.error(f"Произошла ошибка при повторной генерации изображения: {str(e)}")
+            
+            # Отправляем сообщение с ошибкой
+            await interaction.followup.send(f"Произошла ошибка: {str(e)}", ephemeral=True)
 
 @bot.event
 async def on_ready():
