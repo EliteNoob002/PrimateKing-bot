@@ -50,6 +50,21 @@ client_openai = AsyncOpenAI(
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
+# Создаем класс для представления кнопок
+class ImageView(discord.ui.View):
+    def __init__(self, image_url: str, prompt: str):
+        super().__init__()
+        self.image_url = image_url
+        self.prompt = prompt
+
+    @discord.ui.button(label="Скачать изображение", style=discord.ButtonStyle.green)
+    async def download_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(f"Вы можете скачать изображение по [ссылке]({self.image_url}).", ephemeral=True)
+
+    @discord.ui.button(label="Скопировать промт", style=discord.ButtonStyle.blurple)
+    async def copy_prompt_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(f"Промт для копирования: `{self.prompt}`", ephemeral=True)
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
@@ -315,7 +330,10 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         )
         embed.set_image(url=gpt_img)
 
-        await interaction.followup.send(embed=embed)
+        # Создаем объект с кнопками
+        view = ImageView(image_url=gpt_img, prompt=user_input)
+
+        await interaction.followup.send(embed=embed, view=view)
     except ValueError as ve:
         await interaction.followup.send(f'Возникла ошибка при получении URL изображения: {str(ve)}')
         logging.error(f'{str(ve)}')
