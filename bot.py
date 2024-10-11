@@ -65,7 +65,8 @@ class ImageView(discord.ui.View):
     async def copy_prompt_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(f"Промт для копирования: `{self.prompt}`", ephemeral=True)
 
-    @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red)
+    # Кнопка будет на новой строке (ряд 1)
+    @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red, row=1)
     async def regenerate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # Логика повторной генерации изображения
         await interaction.response.defer()
@@ -349,7 +350,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         )
         embed.set_image(url=gpt_img)
 
-        # Создаем объект с кнопками, включая кнопку для повторной генерации
+        # Создаем объект с кнопками
         view = ImageView(image_url=gpt_img, prompt=user_input)
 
         await interaction.followup.send(embed=embed, view=view)
