@@ -65,6 +65,26 @@ class ImageView(discord.ui.View):
     async def copy_prompt_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(f"Промт для копирования: `{self.prompt}`", ephemeral=True)
 
+    @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red)
+    async def regenerate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # Логика повторной генерации изображения
+        await interaction.response.defer()
+        logging.info(f"Повторная генерация картинки по промту: {self.prompt}")
+        
+        # Повторная генерация изображения
+        new_gpt_img = await yandexgptart.generate_and_save_image(self.prompt, interaction.user.name)
+
+        # Создание нового Embed объекта
+        new_embed = discord.Embed(
+            title="Сгенерированное изображение",
+            description="Вот изображение, созданное на основе вашего запроса:",
+            color=discord.Color.blue()
+        )
+        new_embed.set_image(url=new_gpt_img)
+
+        # Отправка нового сообщения
+        await interaction.followup.send(embed=new_embed, view=ImageView(new_gpt_img, self.prompt))
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
@@ -317,20 +337,19 @@ async def gpt(interaction: discord.Interaction, user_input: str):
     user = interaction.user.name
 
     try:
-        # Выполнение функции отправки сообщения
         await interaction.response.defer()
-        logging.info(f"Начата выполение цепочки для генерации картинки. Промпт: {user_input}")
+        logging.info(f"Начата выполнение цепочки для генерации картинки. Промпт: {user_input}")
         gpt_img = await yandexgptart.generate_and_save_image(user_input, user)
         
         # Создание Embed объекта с описанием
         embed = discord.Embed(
             title="Сгенерированное изображение",
             description="Вот изображение, созданное на основе вашего запроса:",
-            color=discord.Color.blue()  # Опционально: установите цвет для Embed
+            color=discord.Color.blue()
         )
         embed.set_image(url=gpt_img)
 
-        # Создаем объект с кнопками
+        # Создаем объект с кнопками, включая кнопку для повторной генерации
         view = ImageView(image_url=gpt_img, prompt=user_input)
 
         await interaction.followup.send(embed=embed, view=view)
