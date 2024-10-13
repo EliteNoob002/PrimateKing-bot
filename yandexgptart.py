@@ -81,7 +81,8 @@ async def upload_to_server(file_path, user):
             original_filename = os.path.basename(file_path)
             data = aiohttp.FormData()
             data.add_field('file', file, filename=original_filename)
-            data.add_field('Username', user)
+            data.add_field('UploadBy', user)
+            data.add_field('BotUpload', True)
             async with session.post(url, data=data) as response:
                 if response.status == 200:
                     response_data = await response.json()
