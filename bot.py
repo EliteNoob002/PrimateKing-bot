@@ -14,6 +14,8 @@ import aiohttp
 import asyncio
 import yandexgpt
 import yandexgptart
+import requests
+
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -47,6 +49,10 @@ client_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 client_openai = AsyncOpenAI(
   api_key=config['openai_key'],
 )
+
+
+TG_BOT_TOKEN = config['tg_bot_token']
+TG_CHAT_ID = config['tg_chat_id']
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
@@ -289,21 +295,35 @@ async def poslat(interaction: discord.Interaction, target: discord.Member):
 async def restart(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду restartbot')
-        await interaction.response.send_message(f' Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
-        ephemeral=True) 
+        send_telegram_notification(
+            f"\u2705 *Успех:* {interaction.user.mention} ({interaction.user.name}) использовал команду /restartbot"
+        )
+        await interaction.response.send_message(
+            f'Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
+            ephemeral=True
+        )
         client_ssh.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
         stdin, stdout, stderr = client_ssh.exec_command('systemctl restart botdis.service')
         data = stdout.read().decode()
         stdin.close()
     else:
-        logging.info(f'{interaction.user.mention} {interaction.user.name} попытался ипользовать команду restart')
-        await interaction.response.send_message(f'У тебя нет доступа к этой команде',
-        ephemeral=True) 
+        logging.info(f'{interaction.user.mention} {interaction.user.name} попытался использовать команду restart')
+        send_telegram_notification(
+            f"\u26a0 *Попытка доступа:* {interaction.user.mention} ({interaction.user.name}) попытался использовать команду /restartbot без прав."
+        )
+        await interaction.response.send_message(
+            f'У тебя нет доступа к этой команде',
+            ephemeral=True
+        )
+
 
 @bot.tree.command(name="update", description="Обновление файлов бота")
 async def update(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду update')
+        send_telegram_notification(
+            f"\u2705 *Успех:* {interaction.user.mention} ({interaction.user.name}) использовал команду /update"
+        )
         client_ssh.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
         stdin, stdout, stderr = client_ssh.exec_command('cd PrimateKing-bot \n git pull')
         data = stdout.read().decode()
@@ -312,6 +332,9 @@ async def update(interaction: discord.Interaction):
         ephemeral=True) 
     else:
         logging.info(f'{interaction.user.mention} {interaction.user.name} попытался ипользовать команду update')
+        send_telegram_notification(
+            f"\u26a0 *Попытка доступа:* {interaction.user.mention} ({interaction.user.name}) попытался использовать команду /update без прав."
+        )
         await interaction.response.send_message(f'У тебя нет доступа к этой команде',
         ephemeral=True)
 
@@ -433,6 +456,18 @@ async def send_message_command(interaction: discord.Interaction, target: discord
         logging.error(f'Произошла ошибка: {e}')
 
     logging.info(f'Комманда send_blin выполнена')
+
+# Функция для отправки уведомлений в Telegram
+def send_telegram_notification(message):
+    url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TG_CHAT_ID,
+        "text": message,
+        "parse_mode": "Markdown",
+    }
+    response = requests.post(url, json=payload)
+    if response.status_code != 200:
+        logging.error(f"Ошибка отправки сообщения: {response.status_code} - {response.text}")
     
 
 
