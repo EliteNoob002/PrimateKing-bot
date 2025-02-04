@@ -54,6 +54,8 @@ client_openai = AsyncOpenAI(
 TG_BOT_TOKEN = config['tg_bot_token']
 TG_CHAT_ID = config['tg_chat_id']
 
+GIF_URLS = config['gif_urls']  # Список GIF-ссылок, на которые реагируем
+
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
 # Создаем класс для представления кнопок
@@ -110,10 +112,10 @@ async def on_ready():
     except Exception as e:
         print(e)
     print('------')
-    webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
-    response = webhook1.execute()
-    webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
-    response = webhook2.execute()
+    #webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
+    #response = webhook1.execute()
+    #webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
+    #response = webhook2.execute()
     while True:
         try:
             await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
@@ -456,6 +458,25 @@ async def send_message_command(interaction: discord.Interaction, target: discord
         logging.error(f'Произошла ошибка: {e}')
 
     logging.info(f'Комманда send_blin выполнена')
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return  # Игнорируем сообщения бота
+
+    # Проверяем ссылки в тексте сообщения
+    for gif_url in GIF_URLS:
+        if gif_url in message.content:
+            await message.reply(gif_url)  # Ответ на сообщение GIF-кой
+            return
+
+    # Проверяем вложенные файлы
+    for attachment in message.attachments:
+        if attachment.url.endswith(".gif") and attachment.url in GIF_URLS:
+            await message.reply(attachment.url)  # Ответ на сообщение загруженным GIF
+            return
+
+    await bot.process_commands(message)  # Обрабатываем остальные команды бота
 
 # Функция для отправки уведомлений в Telegram
 def send_telegram_notification(message):
