@@ -133,6 +133,22 @@ async def on_ready():
         except Exception as e:
             logging.critical("Что-то отъебнуло в статусах ", e)
 
+def slash_command_check():
+    async def predicate(interaction: discord.Interaction):
+        command_name = interaction.command.name
+        try:
+            response = requests.get(
+                f"{API_URL}/bot/commands/slash/{command_name}",
+                timeout=3
+            )
+            if response.status_code == 200:
+                return response.json()['enabled']
+            return True
+        except Exception as e:
+            logging.error(f"Slash check error: {e}")
+            return True
+    return app_commands.check(predicate)
+
 @bot.command()
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
 async def teste(ctx, *arg):
@@ -148,6 +164,7 @@ async def testl(ctx, *arg):
     await ctx.reply(random.randint(100, 200)) 
 
 @bot.tree.command(name="sas", description="Хочешь посасать?")
+@slash_command_check()
 async def sas(interaction: discord.Interaction):
     author = interaction.user
     logging.info(f'{author.mention} {author.name} использовал команду sas')
@@ -159,6 +176,7 @@ async def say(ctx):
     await ctx.send('your code...')    
 
 @bot.tree.command(name="count", description="Узнать сколько раз кто-то был послан на хуй")
+@slash_command_check()
 @app_commands.describe(target='Выберите цель')
 async def count(interaction: discord.Interaction, target: discord.Member):
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду count')
@@ -215,6 +233,7 @@ async def count(interaction: discord.Interaction, target: discord.Member):
                 await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="avatar", description="С помощью этой команды можно получить аватарку участников сервера")
+@slash_command_check()
 @app_commands.describe(target='Выберите цель')
 async def avatar(interaction: discord.Interaction, target: discord.Member):
     logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду avatar')
@@ -253,6 +272,7 @@ async def on_message(message): # при слове "primateking1488" посыл�
 
 
 @bot.tree.command(name="poslat", description="Можно полать кого то на хуй")
+@slash_command_check()
 @app_commands.describe(target='Выберите цель')
 async def poslat(interaction: discord.Interaction, target: discord.Member):
     logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду poslat')
@@ -300,6 +320,7 @@ async def poslat(interaction: discord.Interaction, target: discord.Member):
             connection.close() 
 
 @bot.tree.command(name="restartbot", description="Перезапуск бота")
+@slash_command_check()
 async def restart(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду restartbot')
@@ -326,6 +347,7 @@ async def restart(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="update", description="Обновление файлов бота")
+@slash_command_check()
 async def update(interaction: discord.Interaction):
     if interaction.user.id == config['admin']:
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду update')
@@ -347,30 +369,22 @@ async def update(interaction: discord.Interaction):
         ephemeral=True)
 
 @bot.tree.command(name="help", description="Список доступных команд")
+@slash_command_check()
 async def help_command(interaction: discord.Interaction):
     try:
-        response = requests.get(f"{API_URL}/bot/commands")
+        response = requests.get(f"{API_URL}/bot/active_commands")
+        response.raise_for_status()
         commands_data = response.json()
-        
-        enabled_commands = [
-            cmd for cmd in commands_data 
-            if cmd['enabled'] and not cmd['name'].startswith('help')
-        ]
 
         command_list = []
-        for cmd in enabled_commands:
-            match cmd['type']:
-                case 'slash':
-                    prefix = '/'
-                case 'prefix':
-                    prefix = '$'
-                case 'function':
-                    prefix = 'func_'
-                case _:
-                    prefix = ''
-            
-            description = cmd.get('description', 'Нет описания').strip()
-            command_list.append(f"{prefix}{cmd['name']} - {description}")
+        for cmd in commands_data:
+            # Форматируем имя команды
+            if cmd['type'] == 'slash':
+                display_name = f"/{cmd['name'].lstrip('/')}"
+            else:
+                display_name = cmd['name']  # Префикс уже в базе
+
+            command_list.append(f"{display_name} - {cmd['description']}")
 
         embed = discord.Embed(
             title="📜 Доступные команды",
@@ -388,7 +402,9 @@ async def help_command(interaction: discord.Interaction):
         )
 
 
+
 @bot.tree.command(name="gpt", description="GPT Запрос")
+@slash_command_check()
 @app_commands.describe(user_input='Введите запрос')
 async def gpt(interaction: discord.Interaction, user_input: str):
     user = interaction.user
@@ -408,6 +424,7 @@ async def gpt(interaction: discord.Interaction, user_input: str):
         logging.error(f'Произошла ошибка при обращении к функции YandexGPT: {e}')
         
 @bot.tree.command(name="gpt_art", description="Генерация картинки")
+@slash_command_check()
 @app_commands.describe(user_input='Введите промт')
 async def gpt(interaction: discord.Interaction, user_input: str):
     user = interaction.user.name
@@ -477,6 +494,7 @@ async def send_blin(target_user: discord.User, channel: discord.TextChannel, use
     logging.info(f'Функция send_blin выполнена')
 
 @bot.tree.command(name="send_blin", description="Отправить блин с говном")
+@slash_command_check()
 @app_commands.describe(target='Выберите цель')
 @app_commands.describe(text='Сообщение под картинкой. Необязательно')
 async def send_message_command(interaction: discord.Interaction, target: discord.User, text: Optional[str] = None):
@@ -599,81 +617,92 @@ def send_commands_to_api(commands_list):
             
 # Функция для парсинга команд и функций
 def parse_commands_and_functions():
-    api_data = get_commands_from_api()
+    try:
+        response = requests.get(f"{API_URL}/bot/commands")
+        api_data = response.json()
+        
+        # Преобразуем в словарь для быстрого поиска
+        api_commands = {
+            (item['type'], item['name']): item 
+            for item in api_data
+        }
+        
+    except Exception as e:
+        logging.error(f"API error: {e}")
+        api_commands = {}
+
     commands_list = []
 
-    # Слэш-команды
-    for cmd in bot.tree.walk_commands():
-        if isinstance(cmd, discord.app_commands.Command):
-            api_entry = next((x for x in api_data if x['name'] == cmd.name and x['type'] == 'slash'), None)
+    # Обработка слэш-команд
+    for command in bot.tree.walk_commands():
+        if isinstance(command, discord.app_commands.Command):
+            key = ('slash', command.name)
+            api_entry = api_commands.get(key, {})
+            
             commands_list.append({
-                'name': cmd.name,
+                'name': command.name,
                 'type': 'slash',
-                'enabled': api_entry['enabled'] if api_entry else True,
-                'description': cmd.description
+                'enabled': api_entry.get('enabled', True),
+                'description': command.description or ''
             })
 
-    # Префиксные команды
-    for cmd in bot.commands:
-        if isinstance(cmd, commands.Command):
-            clean_name = cmd.name.lstrip('$')
-            api_entry = next((x for x in api_data if x['name'] == f'${clean_name}' and x['type'] == 'prefix'), None)
+    # Обработка префиксных команд
+    for command in bot.commands:
+        if isinstance(command, commands.Command):
+            clean_name = command.name.lstrip('$')
+            key = ('prefix', clean_name)
+            api_entry = api_commands.get(key, {})
+            
             commands_list.append({
                 'name': f'${clean_name}',
                 'type': 'prefix',
-                'enabled': api_entry['enabled'] if api_entry else True,
-                'description': cmd.help
+                'enabled': api_entry.get('enabled', True),
+                'description': command.help or ''
             })
 
-    # Функции
-    for name, func in globals().items():
-        if callable(func):
-            clean_name = name.removeprefix('func_')
-            api_entry = next((x for x in api_data if x['name'] == f'func_{clean_name}' and x['type'] == 'function'), None)
+    # Обработка функций
+    for func_name, func in globals().items():
+        if inspect.isfunction(func) or inspect.iscoroutinefunction(func):
+            clean_name = func_name.removeprefix('func_')
+            key = ('function', clean_name)
+            api_entry = api_commands.get(key, {})
+            
             commands_list.append({
                 'name': f'func_{clean_name}',
                 'type': 'function',
-                'enabled': api_entry['enabled'] if api_entry else True,
-                'description': func.__doc__
+                'enabled': api_entry.get('enabled', True),
+                'description': func.__doc__.strip() if func.__doc__ else ''
             })
 
     return commands_list
 
 @bot.check
 async def global_command_check(ctx: commands.Context):
-    if ctx.interaction:  # Слэш-команда
-        return True  # Для слэшей проверка делается через отдельный обработчик
+    if ctx.interaction:  # Слэш-команды обрабатываются отдельно
+        return True
 
     try:
-        command_type = 'prefix'
-        clean_name = ctx.command.name.lstrip('$')
-        
-        response = requests.get(
-            f"{API_URL}/bot/commands/{command_type}/{clean_name}",
-            timeout=3
-        )
-        
+        response = requests.get(f"{API_URL}/bot/commands/prefix/{ctx.command.name}")
         if response.status_code == 200:
-            if not response.json()['enabled']:
+            data = response.json()
+            if not data['enabled']:
                 await ctx.reply("🚫 Эта команда временно отключена")
                 return False
-
         return True
-        
     except Exception as e:
         logging.error(f"Command check error: {e}")
         return True
 
+
 @bot.tree.error
-async def on_slash_command_error(interaction: discord.Interaction, error):
+async def on_slash_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message(
-            "🚫 Эта команда временно отключена",
+            "🔒 Эта команда временно недоступна",
             ephemeral=True
         )
-        return
-    
-    logging.error(f"Slash command error: {error}")
+    else:
+        logging.error(f"Slash error: {error}")
 
 @poslat.error
 async def info_error(ctx, error): # если $послать юзер не найден
