@@ -57,7 +57,7 @@ TG_CHAT_ID = config['tg_chat_id']
 
 GIF_URLS = config['gif_urls']  # Список GIF-ссылок, на которые реагируем
 
-API_URL = config['api_url']
+API_URL = config['my_api_url']
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
