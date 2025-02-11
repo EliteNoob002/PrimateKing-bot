@@ -16,6 +16,7 @@ import yandexgpt
 import yandexgptart
 import requests
 import json
+import inspect
 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
@@ -553,24 +554,24 @@ def parse_commands_and_functions():
 
     # Обрабатываем префиксные команды
     for command in bot.commands:
-        if isinstance(command, commands.Command):  # Проверяем команду на тип Command
+        if isinstance(command, commands.Command):
             commands_list.append({
                 'name': command.name,
                 'type': 'prefix',
-                'status': True,  # Статус можно настроить как нужно
-                'description': command.help or ''  # Описание команды
+                'status': True,
+                'description': command.help or ''
             })
 
-    # Обрабатываем обычные функции async def, зарегистрированные как команды
-    for func_name, func in bot.__dict__.items():
-        if callable(func) and isinstance(func, asyncio.coroutine):  # Проверяем, что это асинхронная функция
+    # Обрабатываем обычные асинхронные функции
+    for func_name, func in globals().items():  # Проходим по глобальным функциям
+        if inspect.iscoroutinefunction(func):  # Проверяем, является ли это асинхронной функцией
             commands_list.append({
                 'name': func_name,
-                'type': 'function',  # Это будет тип функции
-                'status': True,  # Статус можно настроить как нужно
-                'description': ''  # Можно добавить описание, если оно есть
+                'type': 'function',
+                'status': True,
+                'description': ''
             })
-            
+
     return commands_list
 
 
