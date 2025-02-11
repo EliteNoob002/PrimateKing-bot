@@ -535,7 +535,6 @@ def send_commands_to_api(commands_list):
         # Фильтруем только новые команды и добавляем поле 'id'
         new_commands = [
             {
-                "id": None if command.get("id") is None else None,  # ячейка для null
                 "name": command['name'],
                 "type": command['type'],
                 "enabled": command.get('enabled', True),  # enabled вместо status
@@ -549,7 +548,7 @@ def send_commands_to_api(commands_list):
             return
 
         # Логируем сам запрос перед отправкой
-        logging.info(f"Отправка команд в API: {new_commands}")
+        logging.debug(f"Отправка команд в API: {new_commands}")
 
         # Отправляем команды
         response = requests.post(url, json=new_commands, headers=headers)
