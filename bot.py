@@ -17,7 +17,6 @@ import yandexgptart
 import requests
 import json
 import inspect
-import uuid
 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
@@ -536,7 +535,7 @@ def send_commands_to_api(commands_list):
         # Фильтруем только новые команды и добавляем поле 'id'
         new_commands = [
             {
-                "id": str(uuid.uuid4()),  # Генерируем уникальный id
+                "id": None,  # Устанавливаем id в null
                 "name": command['name'],
                 "type": command['type'],
                 "enabled": command.get('enabled', True),  # enabled вместо status
