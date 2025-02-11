@@ -120,9 +120,11 @@ async def on_ready():
     response = webhook1.execute()
     webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
     response = webhook2.execute()
-    existing_commands = get_commands_from_api()
-    all_commands = parse_commands_and_functions()
-    commands_to_send = [cmd for cmd in all_commands if cmd['name'] not in existing_commands]
+    commands_to_send = [
+        cmd for cmd in parse_commands_and_functions() 
+        if cmd['name'] not in get_commands_from_api()
+    ]
+
     if commands_to_send:
         send_commands_to_api(commands_to_send)
     else:
@@ -522,23 +524,38 @@ def get_commands_from_api():
 # Функция для отправки команд в API
 def send_commands_to_api(commands_list):
     try:
-        # Формируем полный URL
         url = f"{API_URL}/bot/items"
         headers = {"Content-Type": "application/json"}
-        payload = json.dumps([{
-            "name": command['name'],
-            "type": command['type'],
-            "status": command.get('status', False),
-            "description": command.get('description', '')
-        } for command in commands_list])  
-        
-        response = requests.post(url, data=payload, headers=headers)
-        response.raise_for_status()  # Вызываем исключение для статуса != 200
-        
+
+        # Получаем список существующих команд в API
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        existing_commands = {item["name"] for item in response.json()}  # Собираем имена
+
+        # Фильтруем только новые команды
+        new_commands = [
+            {
+                "name": command['name'],
+                "type": command['type'],
+                "enabled": command.get('enabled', True),  # enabled вместо status
+                "description": command.get('description', '')
+            }
+            for command in commands_list if command["name"] not in existing_commands
+        ]
+
+        if not new_commands:
+            logging.info("Нет новых команд для отправки в API.")
+            return
+
+        # Отправляем команды
+        response = requests.post(url, json=new_commands, headers=headers)
+        response.raise_for_status()
         logging.info("Команды успешно отправлены в API.")
+
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при отправке команд в API: {e}")
 
+# Функция для парсинга команд и функций
 def parse_commands_and_functions():
     commands_list = []
 
@@ -548,8 +565,8 @@ def parse_commands_and_functions():
             commands_list.append({
                 'name': command.name,
                 'type': 'slash',
-                'status': True,  # Статус можно настроить как нужно
-                'description': command.description or ''  # Описание
+                'enabled': True,  # enabled вместо status
+                'description': command.description or ''
             })
 
     # Обрабатываем префиксные команды
@@ -558,22 +575,21 @@ def parse_commands_and_functions():
             commands_list.append({
                 'name': command.name,
                 'type': 'prefix',
-                'status': True,
+                'enabled': True,
                 'description': command.help or ''
             })
 
-    # Обрабатываем обычные асинхронные функции
-    for func_name, func in globals().items():  # Проходим по глобальным функциям
-        if inspect.iscoroutinefunction(func):  # Проверяем, является ли это асинхронной функцией
+    # Обрабатываем обычные функции и асинхронные функции
+    for func_name, func in globals().items():
+        if inspect.isfunction(func) or inspect.iscoroutinefunction(func):  # def и async def
             commands_list.append({
                 'name': func_name,
                 'type': 'function',
-                'status': True,
-                'description': ''
+                'enabled': True,
+                'description': func.__doc__.strip() if func.__doc__ else ''  # Берём docstring
             })
 
     return commands_list
-
 
 @poslat.error
 async def info_error(ctx, error): # если $послать юзер не найден
