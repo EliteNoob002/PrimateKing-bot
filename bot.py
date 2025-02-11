@@ -539,12 +539,12 @@ def send_commands_to_api(commands_list):
         logging.error(f"Ошибка при отправке команд в API: {e}")
 
 def parse_commands_and_functions():
-    commands = []
+    commands_list = []
 
     # Обрабатываем слэш-команды
     for command in bot.tree.walk_commands():
         if isinstance(command, discord.app_commands.Command):
-            commands.append({
+            commands_list.append({
                 'name': command.name,
                 'type': 'slash',
                 'status': True,  # Статус можно настроить как нужно
@@ -553,8 +553,8 @@ def parse_commands_and_functions():
 
     # Обрабатываем префиксные команды
     for command in bot.commands:
-        if isinstance(command, commands.Command):
-            commands.append({
+        if isinstance(command, commands.Command):  # Проверяем команду на тип Command
+            commands_list.append({
                 'name': command.name,
                 'type': 'prefix',
                 'status': True,  # Статус можно настроить как нужно
@@ -563,16 +563,15 @@ def parse_commands_and_functions():
 
     # Обрабатываем обычные функции async def, зарегистрированные как команды
     for func_name, func in bot.__dict__.items():
-        if callable(func) and isinstance(func, asyncio.coroutine):
-            # Если функция является корутиной (async def), то парсим её
-            commands.append({
+        if callable(func) and isinstance(func, asyncio.coroutine):  # Проверяем, что это асинхронная функция
+            commands_list.append({
                 'name': func_name,
                 'type': 'function',  # Это будет тип функции
                 'status': True,  # Статус можно настроить как нужно
                 'description': ''  # Можно добавить описание, если оно есть
             })
             
-    return commands
+    return commands_list
 
 
 @poslat.error
