@@ -549,7 +549,7 @@ def send_commands_to_api(commands_list):
             return
 
         # Логируем сам запрос перед отправкой
-        logging.debug(f"Отправка команд в API: {new_commands}")
+        logging.info(f"Отправка команд в API: {new_commands}")
 
         # Отправляем команды
         response = requests.post(url, json=new_commands, headers=headers)
