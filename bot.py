@@ -535,7 +535,7 @@ def send_commands_to_api(commands_list):
         # Фильтруем только новые команды и добавляем поле 'id'
         new_commands = [
             {
-                "id": '',  # Устанавливаем id в null
+                "id": None if command.get("id") is None else None,  # ячейка для null
                 "name": command['name'],
                 "type": command['type'],
                 "enabled": command.get('enabled', True),  # enabled вместо status
@@ -561,7 +561,7 @@ def send_commands_to_api(commands_list):
         logging.error(f"Запрос: URL={url}, Headers={headers}, Данные={new_commands}")
         if response.text:
             logging.error(f"Ответ от API: {response.text}")
-
+            
 # Функция для парсинга команд и функций
 def parse_commands_and_functions():
     commands_list = []
