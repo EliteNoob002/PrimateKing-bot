@@ -15,6 +15,7 @@ import asyncio
 import yandexgpt
 import yandexgptart
 import requests
+import json
 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
@@ -55,6 +56,8 @@ TG_BOT_TOKEN = config['tg_bot_token']
 TG_CHAT_ID = config['tg_chat_id']
 
 GIF_URLS = config['gif_urls']  # Список GIF-ссылок, на которые реагируем
+
+API_URL = config['api_url']
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
@@ -116,6 +119,13 @@ async def on_ready():
     response = webhook1.execute()
     webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
     response = webhook2.execute()
+    existing_commands = get_commands_from_api()
+    all_commands = parse_commands_and_functions()
+    commands_to_send = [cmd for cmd in all_commands if cmd['name'] not in existing_commands]
+    if commands_to_send:
+        send_commands_to_api(commands_to_send)
+    else:
+        logging.info("Все команды уже существуют в базе данных.")
     while True:
         try:
             await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
@@ -489,7 +499,80 @@ def send_telegram_notification(message):
     response = requests.post(url, json=payload)
     if response.status_code != 200:
         logging.error(f"Ошибка отправки сообщения: {response.status_code} - {response.text}")
-    
+
+# Функция для получения команд из базы
+def get_commands_from_api():
+    try:
+        # Формируем полный URL
+        url = f"{API_URL}/bot/items"
+        response = requests.get(url)
+        response.raise_for_status()  # Вызываем исключение для статуса != 200
+        commands = {item['name']: {
+                        'status': item.get('enabled', False),
+                        'description': item.get('description', '')
+                    } 
+                    for item in response.json()}
+        return commands
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при получении команд из API: {e}")
+        return {}
+
+
+# Функция для отправки команд в API
+def send_commands_to_api(commands_list):
+    try:
+        # Формируем полный URL
+        url = f"{API_URL}/bot/items"
+        headers = {"Content-Type": "application/json"}
+        payload = json.dumps([{
+            "name": command['name'],
+            "type": command['type'],
+            "status": command.get('status', False),
+            "description": command.get('description', '')
+        } for command in commands_list])  
+        
+        response = requests.post(url, data=payload, headers=headers)
+        response.raise_for_status()  # Вызываем исключение для статуса != 200
+        
+        logging.info("Команды успешно отправлены в API.")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при отправке команд в API: {e}")
+
+def parse_commands_and_functions():
+    commands = []
+
+    # Обрабатываем слэш-команды
+    for command in bot.tree.walk_commands():
+        if isinstance(command, discord.app_commands.Command):
+            commands.append({
+                'name': command.name,
+                'type': 'slash',
+                'status': True,  # Статус можно настроить как нужно
+                'description': command.description or ''  # Описание
+            })
+
+    # Обрабатываем префиксные команды
+    for command in bot.commands:
+        if isinstance(command, commands.Command):
+            commands.append({
+                'name': command.name,
+                'type': 'prefix',
+                'status': True,  # Статус можно настроить как нужно
+                'description': command.help or ''  # Описание команды
+            })
+
+    # Обрабатываем обычные функции async def, зарегистрированные как команды
+    for func_name, func in bot.__dict__.items():
+        if callable(func) and isinstance(func, asyncio.coroutine):
+            # Если функция является корутиной (async def), то парсим её
+            commands.append({
+                'name': func_name,
+                'type': 'function',  # Это будет тип функции
+                'status': True,  # Статус можно настроить как нужно
+                'description': ''  # Можно добавить описание, если оно есть
+            })
+            
+    return commands
 
 
 @poslat.error
