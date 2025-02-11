@@ -535,7 +535,7 @@ def send_commands_to_api(commands_list):
         # Фильтруем только новые команды и добавляем поле 'id'
         new_commands = [
             {
-                "id": None,  # Устанавливаем id в null
+                "id": '',  # Устанавливаем id в null
                 "name": command['name'],
                 "type": command['type'],
                 "enabled": command.get('enabled', True),  # enabled вместо status
