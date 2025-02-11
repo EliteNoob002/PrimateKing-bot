@@ -17,6 +17,7 @@ import yandexgptart
 import requests
 import json
 import inspect
+import uuid
 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
@@ -532,9 +533,10 @@ def send_commands_to_api(commands_list):
         response.raise_for_status()
         existing_commands = {item["name"] for item in response.json()}  # Собираем имена
 
-        # Фильтруем только новые команды
+        # Фильтруем только новые команды и добавляем поле 'id'
         new_commands = [
             {
+                "id": str(uuid.uuid4()),  # Генерируем уникальный id
                 "name": command['name'],
                 "type": command['type'],
                 "enabled": command.get('enabled', True),  # enabled вместо status
@@ -550,7 +552,7 @@ def send_commands_to_api(commands_list):
         # Логируем сам запрос перед отправкой
         logging.debug(f"Отправка команд в API: {new_commands}")
 
-        # Отправляем команды (json автоматически кодирует в UTF-8)
+        # Отправляем команды
         response = requests.post(url, json=new_commands, headers=headers)
         response.raise_for_status()
         logging.info("Команды успешно отправлены в API.")
@@ -560,7 +562,7 @@ def send_commands_to_api(commands_list):
         logging.error(f"Запрос: URL={url}, Headers={headers}, Данные={new_commands}")
         if response.text:
             logging.error(f"Ответ от API: {response.text}")
-            
+
 # Функция для парсинга команд и функций
 def parse_commands_and_functions():
     commands_list = []
