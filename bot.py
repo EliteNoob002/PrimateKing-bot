@@ -547,13 +547,20 @@ def send_commands_to_api(commands_list):
             logging.info("Нет новых команд для отправки в API.")
             return
 
+        # Преобразуем данные в JSON
+        payload = json.dumps(new_commands, indent=4, ensure_ascii=False)
+
+        # Логируем сам запрос перед отправкой
+        logging.debug(f"Отправка команд в API: {payload}")
+
         # Отправляем команды
-        response = requests.post(url, json=new_commands, headers=headers)
+        response = requests.post(url, data=payload, headers=headers)
         response.raise_for_status()
         logging.info("Команды успешно отправлены в API.")
 
     except requests.exceptions.RequestException as e:
-        logging.error(f"Ошибка при отправке команд в API: {e}")
+        logging.error(f"Ошибка при отправке команд в API: {e}", exc_info=True)
+        logging.error(f"Запрос: URL={url}, Headers={headers}, Payload={payload}")
 
 # Функция для парсинга команд и функций
 def parse_commands_and_functions():
