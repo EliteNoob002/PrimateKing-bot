@@ -558,7 +558,9 @@ def send_commands_to_api(commands_list):
     except requests.exceptions.RequestException as e:
         logging.error(f"Ошибка при отправке команд в API: {e}", exc_info=True)
         logging.error(f"Запрос: URL={url}, Headers={headers}, Данные={new_commands}")
-
+        if response.text:
+            logging.error(f"Ответ от API: {response.text}")
+            
 # Функция для парсинга команд и функций
 def parse_commands_and_functions():
     commands_list = []
