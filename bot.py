@@ -371,6 +371,7 @@ async def update(interaction: discord.Interaction):
 @bot.tree.command(name="help", description="Список доступных команд")
 @slash_command_check()
 async def help_command(interaction: discord.Interaction):
+    logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду help')
     try:
         response = requests.get(f"{API_URL}/bot/active_commands")
         response.raise_for_status()
