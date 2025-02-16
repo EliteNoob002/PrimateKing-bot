@@ -110,8 +110,7 @@ class ImageView(discord.ui.View):
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
-    current_commands = parse_commands_and_functions()
-    requests.post(f"{API_URL}/bot/items", json=current_commands)
+    send_commands_to_api()
     try:
         synced = await bot.tree.sync()
         print(f'Synced {len(synced)} command(s)')
@@ -576,58 +575,16 @@ def get_commands_from_api():
         return {}
 
 
-# Функция для отправки команд в API
-def send_commands_to_api(commands_list):
-    try:
-        url = f"{API_URL}/bot/items"
-        headers = {"Content-Type": "application/json"}
-
-        # Получаем список существующих команд в API
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        existing_commands = {item["name"] for item in response.json()}  # Собираем имена
-
-        # Фильтруем только новые команды и добавляем поле 'id'
-        new_commands = [
-            {
-                "name": command['name'],
-                "type": command['type'],
-                "enabled": command.get('enabled', True),  # enabled вместо status
-                "description": command.get('description', '')
-            }
-            for command in commands_list if command["name"] not in existing_commands
-        ]
-
-        if not new_commands:
-            logging.info("Нет новых команд для отправки в API.")
-            return
-
-        # Логируем сам запрос перед отправкой
-        logging.debug(f"Отправка команд в API: {new_commands}")
-
-        # Отправляем команды
-        response = requests.post(url, json=new_commands, headers=headers)
-        response.raise_for_status()
-        logging.info("Команды успешно отправлены в API.")
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Ошибка при отправке команд в API: {e}", exc_info=True)
-        logging.error(f"Запрос: URL={url}, Headers={headers}, Данные={new_commands}")
-        if response.text:
-            logging.error(f"Ответ от API: {response.text}")
-            
 # Функция для парсинга команд и функций
 def parse_commands_and_functions():
     try:
         response = requests.get(f"{API_URL}/bot/commands")
         api_data = response.json()
-        
         # Преобразуем в словарь для быстрого поиска
         api_commands = {
             (item['type'], item['name']): item 
             for item in api_data
         }
-        
     except Exception as e:
         logging.error(f"API error: {e}")
         api_commands = {}
@@ -639,7 +596,6 @@ def parse_commands_and_functions():
         if isinstance(command, discord.app_commands.Command):
             key = ('slash', command.name)
             api_entry = api_commands.get(key, {})
-            
             commands_list.append({
                 'name': command.name,
                 'type': 'slash',
@@ -650,10 +606,10 @@ def parse_commands_and_functions():
     # Обработка префиксных команд
     for command in bot.commands:
         if isinstance(command, commands.Command):
+            # Убираем префикс, если он есть
             clean_name = command.name.lstrip('$')
             key = ('prefix', clean_name)
             api_entry = api_commands.get(key, {})
-            
             commands_list.append({
                 'name': f'${clean_name}',
                 'type': 'prefix',
@@ -661,13 +617,13 @@ def parse_commands_and_functions():
                 'description': command.help or ''
             })
 
-    # Обработка функций
+    # Обработка функций (если есть)
     for func_name, func in globals().items():
         if inspect.isfunction(func) or inspect.iscoroutinefunction(func):
+            # Если имя функции начинается с "func_", убираем этот префикс
             clean_name = func_name.removeprefix('func_')
             key = ('function', clean_name)
             api_entry = api_commands.get(key, {})
-            
             commands_list.append({
                 'name': f'func_{clean_name}',
                 'type': 'function',
@@ -676,6 +632,48 @@ def parse_commands_and_functions():
             })
 
     return commands_list
+
+# Функция для отправки команд в API
+def send_commands_to_api():
+    try:
+        # Получаем список текущих команд
+        commands_list = parse_commands_and_functions()
+        url = f"{API_URL}/bot/items"
+        headers = {"Content-Type": "application/json"}
+
+        # Получаем список существующих команд из API
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        existing_commands = {item["name"] for item in response.json()}
+
+        # Фильтруем только новые команды (те, которых нет в API)
+        new_commands = [
+            {
+                "name": command['name'],
+                "type": command['type'],
+                "enabled": command.get('enabled', True),
+                "description": command.get('description', '')
+            }
+            for command in commands_list if command["name"] not in existing_commands
+        ]
+
+        if not new_commands:
+            logging.info("Нет новых команд для отправки в API.")
+            return
+
+        # Логируем данные запроса перед отправкой
+        logging.debug(f"Отправка команд в API: {new_commands}")
+
+        # Отправляем новые команды в API
+        response = requests.post(url, json=new_commands, headers=headers)
+        response.raise_for_status()
+        logging.info("Команды успешно отправлены в API.")
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Ошибка при отправке команд в API: {e}", exc_info=True)
+        logging.error(f"Запрос: URL={url}, Headers={headers}, Данные={new_commands}")
+        if response.text:
+            logging.error(f"Ответ от API: {response.text}")
 
 @bot.check
 async def global_command_check(ctx: commands.Context):
