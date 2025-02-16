@@ -80,7 +80,7 @@ async def upload_to_server(file_path, user):
         with open(file_path, 'rb') as file:
             original_filename = os.path.basename(file_path)
             data = aiohttp.FormData()
-            data.add_field('files[]', file, filename=original_filename)
+            data.add_field('files', file, filename=original_filename)
             data.add_field('UploadBy', user)
             data.add_field('BotUpload', 'true')
             async with session.post(url, data=data) as response:
