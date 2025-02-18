@@ -64,15 +64,23 @@ API_URL = config['my_api_url']
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
 # Декоратор для проверки включенности функции 
+import functools
+import requests
+import logging
+
 def function_enabled_check(function_name: str):
     def decorator(callback):
+        @functools.wraps(callback)
         async def wrapper(*args, **kwargs):
             try:
                 response = requests.get(
                     f"{API_URL}/bot/commands/function/{function_name}",
                     timeout=3
                 )
+                logging.info(f"API response for {function_name}: {response.json()}")
+                # Если функция отключена, завершаем выполнение
                 if response.status_code == 200 and not response.json().get('enabled', True):
+                    logging.info(f"Функция {function_name} отключена. Не вызываем callback.")
                     return
             except Exception as e:
                 logging.error(f"Function check error для {function_name}: {e}")
@@ -80,6 +88,7 @@ def function_enabled_check(function_name: str):
             return await callback(*args, **kwargs)
         return wrapper
     return decorator
+
 
 # Класс View с кнопками
 class ImageView(discord.ui.View):
@@ -529,8 +538,8 @@ async def send_message_command(interaction: discord.Interaction, target: discord
 
     logging.info(f'Комманда send_blin выполнена')
 
-@bot.event
 @function_enabled_check("on_message")
+@bot.event
 async def on_message(message):
     if message.author == bot.user:
         return  # Игнорируем сообщения бота
@@ -548,6 +557,7 @@ async def on_message(message):
             return
 
     await bot.process_commands(message)
+
 
 # Функция для отправки уведомлений в Telegram
 def send_telegram_notification(message):
