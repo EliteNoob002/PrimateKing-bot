@@ -77,13 +77,11 @@ def function_enabled_check(function_name: str):
                     f"{API_URL}/bot/commands/function/{function_name}",
                     timeout=3
                 )
-                logging.info(f"API response for {function_name}: {response.json()}")
-                # Если функция отключена, завершаем выполнение
-                if response.status_code == 200 and not response.json().get('enabled', True):
-                    logging.info(f"Функция {function_name} отключена. Не вызываем callback.")
-                    return
+                data = response.json()
+                if response.status_code == 200 and not data.get('enabled', True):
+                    return 
             except Exception as e:
-                logging.error(f"Function check error для {function_name}: {e}")
+                logging.error(f"[Decorator] Ошибка проверки для {function_name}: {e}")
                 return
             return await callback(*args, **kwargs)
         return wrapper
@@ -538,11 +536,11 @@ async def send_message_command(interaction: discord.Interaction, target: discord
 
     logging.info(f'Комманда send_blin выполнена')
 
-@function_enabled_check("on_message")
-@bot.event
-async def on_message(message):
+async def on_message_gifs(message):
     if message.author == bot.user:
         return  # Игнорируем сообщения бота
+
+    logging.info("[on_message_handler] Сообщение получено")
 
     # Проверяем ссылки в тексте сообщения
     for gif_url in GIF_URLS:
@@ -557,6 +555,8 @@ async def on_message(message):
             return
 
     await bot.process_commands(message)
+decorated_on_message = function_enabled_check("on_message_gifs")(on_message_gifs)
+bot.add_listener(decorated_on_message, "on_message")
 
 
 # Функция для отправки уведомлений в Telegram
