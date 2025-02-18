@@ -30,7 +30,7 @@ logging.critical("A message of CRITICAL severity")
 
 description = '''PrimateKing'''
 
-with open("config.yml", esend_telegram_notificationncoding='utf-8') as f:
+with open("config.yml", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
 
 
