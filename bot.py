@@ -17,6 +17,7 @@ import yandexgptart
 import requests
 import json
 import inspect
+from datetime import datetime
 
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
@@ -29,7 +30,7 @@ logging.critical("A message of CRITICAL severity")
 
 description = '''PrimateKing'''
 
-with open("config.yml", encoding='utf-8') as f:
+with open("config.yml", esend_telegram_notificationncoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
 
 
@@ -62,49 +63,61 @@ API_URL = config['my_api_url']
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
-# Создаем класс для представления кнопок
+# Декоратор для проверки включенности функции 
+def function_enabled_check(function_name: str):
+    def decorator(callback):
+        async def wrapper(self, interaction: discord.Interaction, button: discord.ui.Button):
+            try:
+                response = requests.get(
+                    f"{API_URL}/bot/commands/function/{function_name}",
+                    timeout=3
+                )
+                if response.status_code == 200 and not response.json().get('enabled', True):
+                    await interaction.response.send_message("Эта функция отключена", ephemeral=True)
+                    return
+            except Exception as e:
+                logging.error(f"Function check error для {function_name}: {e}")
+            return await callback(self, interaction, button)
+        return wrapper
+    return decorator
+
+# Класс View с кнопками
 class ImageView(discord.ui.View):
     def __init__(self, image_url: str, prompt: str):
-        super().__init__()
+        # timeout=None – view не будет отключаться автоматически
+        super().__init__(timeout=None)
         self.image_url = image_url
         self.prompt = prompt
 
-    @discord.ui.button(label="Скачать изображение", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="Скачать изображение", style=discord.ButtonStyle.green, custom_id="download_image")
     async def download_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"Вы можете скачать изображение по [ссылке]({self.image_url}).", ephemeral=True)
+        await interaction.response.send_message(
+            f"Вы можете скачать изображение по [ссылке]({self.image_url}).", ephemeral=True
+        )
 
-    @discord.ui.button(label="Скопировать промт", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label="Скопировать промт", style=discord.ButtonStyle.blurple, custom_id="copy_prompt")
     async def copy_prompt_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"Промт для копирования: `{self.prompt}`", ephemeral=True)
+        await interaction.response.send_message(
+            f"Промт для копирования: `{self.prompt}`", ephemeral=True
+        )
 
-    # Кнопка будет на новой строке (ряд 1)
-    @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red, row=1)
+    @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red, row=1, custom_id="regenerate_image")
     async def regenerate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
-            # Отправляем временное сообщение с уведомлением о процессе генерации
             await interaction.response.send_message("Генерация изображения, пожалуйста, подождите...", ephemeral=True)
-
             logging.info(f"Повторная генерация картинки по промту: {self.prompt}")
-
-            # Повторная генерация изображения
             new_gpt_img = await yandexgptart.generate_and_save_image(self.prompt, interaction.user.name)
-
-            # Создание нового Embed объекта с новым изображением
             new_embed = discord.Embed(
                 title="Сгенерированное изображение",
                 description="Вот изображение, созданное на основе вашего запроса:",
                 color=discord.Color.blue()
             )
             new_embed.set_image(url=new_gpt_img)
-
-            # Отправляем новое сообщение с изображением (старое сообщение остаётся нетронутым)
-            await interaction.followup.send(embed=new_embed, view=ImageView(new_gpt_img, self.prompt))
-
+            new_view = ImageView(new_gpt_img, self.prompt)
+            await interaction.followup.send(embed=new_embed, view=new_view)
+            bot.add_view(new_view)  # Регистрация нового постоянного view
         except Exception as e:
-            # Логирование ошибки
-            logging.error(f"Произошла ошибка при повторной генерации изображения: {str(e)}")
-            
-            # Отправляем сообщение с ошибкой
+            logging.error(f"Ошибка при повторной генерации изображения: {str(e)}")
             await interaction.followup.send(f"Произошла ошибка: {str(e)}", ephemeral=True)
 
 @bot.event
@@ -123,14 +136,17 @@ async def on_ready():
     response = webhook2.execute()
     while True:
         try:
-            await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_playing']), type = discord.ActivityType.playing))
+            await bot.change_presence(status=discord.Status.online, activity=discord.Activity(
+                name=random.choice(config['status_playing']), type=discord.ActivityType.playing))
             await sleep(config['time_sleep'])
-            await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_watching']), type = discord.ActivityType.watching))
+            await bot.change_presence(status=discord.Status.online, activity=discord.Activity(
+                name=random.choice(config['status_watching']), type=discord.ActivityType.watching))
             await sleep(config['time_sleep'])
-            await bot.change_presence(status = discord.Status.online, activity = discord.Activity(name = random.choice(config['status_listening']), type = discord.ActivityType.listening))
+            await bot.change_presence(status=discord.Status.online, activity=discord.Activity(
+                name=random.choice(config['status_listening']), type=discord.ActivityType.listening))
             await sleep(config['time_sleep'])
         except Exception as e:
-            logging.critical("Что-то отъебнуло в статусах ", e)
+            logging.critical("Ошибка при смене статусов: ", exc_info=True)
 
 def slash_command_check():
     async def predicate(interaction: discord.Interaction):
@@ -426,35 +442,30 @@ async def gpt(interaction: discord.Interaction, user_input: str):
 @bot.tree.command(name="gpt_art", description="Генерация картинки")
 @slash_command_check()
 @app_commands.describe(user_input='Введите промт')
-async def gpt(interaction: discord.Interaction, user_input: str):
+async def gpt_art(interaction: discord.Interaction, user_input: str):
     user = interaction.user.name
-
     try:
         await interaction.response.defer()
-        logging.info(f"Начата выполнение цепочки для генерации картинки. Промпт: {user_input}")
+        logging.info(f"Начата генерация картинки. Промт: {user_input}")
         gpt_img = await yandexgptart.generate_and_save_image(user_input, user)
-        
-        # Создание Embed объекта с описанием
         embed = discord.Embed(
             title="Сгенерированное изображение",
             description="Вот изображение, созданное на основе вашего запроса:",
             color=discord.Color.blue()
         )
         embed.set_image(url=gpt_img)
-
-        # Создаем объект с кнопками
         view = ImageView(image_url=gpt_img, prompt=user_input)
-
         await interaction.followup.send(embed=embed, view=view)
+        bot.add_view(view)  # Регистрируем view для постоянного отслеживания
     except ValueError as ve:
-        await interaction.followup.send(f'Возникла ошибка при получении URL изображения: {str(ve)}')
-        logging.error(f'{str(ve)}')
+        await interaction.followup.send(f'Ошибка при получении URL изображения: {str(ve)}')
+        logging.error(str(ve))
     except Exception as e:
         if str(e) == "Промт не проходит проверку Яндекса":
-            await interaction.followup.send(f'Промт не проходит проверку Яндекса')
+            await interaction.followup.send('Промт не проходит проверку Яндекса')
         else:
-            await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT ART: {str(e)}')
-            logging.error(f'Произошла ошибка при обращении к функции YandexGPT ART: {str(e)}')
+            await interaction.followup.send(f'Ошибка при обращении к функции YandexGPT ART: {str(e)}')
+            logging.error(f"Ошибка YandexGPT ART: {str(e)}")
         raise
 
 async def check_image(url: str) -> bool:
@@ -540,14 +551,19 @@ async def on_message(message):
 # Функция для отправки уведомлений в Telegram
 def send_telegram_notification(message):
     url = f"https://api.telegram.org/bot{TG_BOT_TOKEN}/sendMessage"
+    formatted_message = (
+        f"📢 **Уведомление бота**\n\n"
+        f"{message}\n\n"
+        f"_Время уведомления: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_"
+    )
     payload = {
         "chat_id": TG_CHAT_ID,
-        "text": message,
+        "text": formatted_message,
         "parse_mode": "Markdown",
     }
     response = requests.post(url, json=payload)
     if response.status_code != 200:
-        logging.error(f"Ошибка отправки сообщения: {response.status_code} - {response.text}")
+        logging.error(f"Ошибка отправки сообщения в Telegram: {response.status_code} - {response.text}")
 
 # Функция для получения команд из базы
 def get_commands_from_api():
