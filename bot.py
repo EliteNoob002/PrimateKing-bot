@@ -73,7 +73,6 @@ def function_enabled_check(function_name: str):
                     timeout=3
                 )
                 if response.status_code == 200 and not response.json().get('enabled', True):
-                    await interaction.response.send_message("Эта функция отключена", ephemeral=True)
                     return
             except Exception as e:
                 logging.error(f"Function check error для {function_name}: {e}")
@@ -531,6 +530,7 @@ async def send_message_command(interaction: discord.Interaction, target: discord
 
 @bot.event
 async def on_message(message):
+    function_enabled_check("on_message")
     if message.author == bot.user:
         return  # Игнорируем сообщения бота
 
@@ -713,7 +713,7 @@ async def global_command_check(ctx: commands.Context):
 async def on_slash_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
         await interaction.response.send_message(
-            "🔒 Эта команда временно недоступна",
+            "🚫 Эта команда временно отключена",
             ephemeral=True
         )
     else:
