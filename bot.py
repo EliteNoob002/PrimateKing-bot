@@ -540,8 +540,6 @@ async def on_message_gifs(message):
     if message.author == bot.user:
         return  # Игнорируем сообщения бота
 
-    logging.info("[on_message_handler] Сообщение получено")
-
     # Проверяем ссылки в тексте сообщения
     for gif_url in GIF_URLS:
         if gif_url in message.content:
