@@ -66,7 +66,7 @@ bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , i
 # Декоратор для проверки включенности функции 
 def function_enabled_check(function_name: str):
     def decorator(callback):
-        async def wrapper(self, interaction: discord.Interaction, button: discord.ui.Button):
+        async def wrapper(*args, **kwargs):
             try:
                 response = requests.get(
                     f"{API_URL}/bot/commands/function/{function_name}",
@@ -76,7 +76,8 @@ def function_enabled_check(function_name: str):
                     return
             except Exception as e:
                 logging.error(f"Function check error для {function_name}: {e}")
-            return await callback(self, interaction, button)
+                return
+            return await callback(*args, **kwargs)
         return wrapper
     return decorator
 
@@ -529,24 +530,24 @@ async def send_message_command(interaction: discord.Interaction, target: discord
     logging.info(f'Комманда send_blin выполнена')
 
 @bot.event
+@function_enabled_check("on_message")
 async def on_message(message):
-    function_enabled_check("on_message")
     if message.author == bot.user:
         return  # Игнорируем сообщения бота
 
     # Проверяем ссылки в тексте сообщения
     for gif_url in GIF_URLS:
         if gif_url in message.content:
-            await message.reply(gif_url)  # Ответ на сообщение GIF-кой
+            await message.reply(gif_url)
             return
 
     # Проверяем вложенные файлы
     for attachment in message.attachments:
         if attachment.url.endswith(".gif") and attachment.url in GIF_URLS:
-            await message.reply(attachment.url)  # Ответ на сообщение загруженным GIF
+            await message.reply(attachment.url)
             return
 
-    await bot.process_commands(message)  # Обрабатываем остальные команды бота
+    await bot.process_commands(message)
 
 # Функция для отправки уведомлений в Telegram
 def send_telegram_notification(message):
