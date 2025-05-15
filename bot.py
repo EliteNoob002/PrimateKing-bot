@@ -1,6 +1,6 @@
 import random
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import yaml
 import logging
 from discord import app_commands
@@ -127,33 +127,47 @@ class ImageView(discord.ui.View):
             logging.error(f"Ошибка при повторной генерации изображения: {str(e)}")
             await interaction.followup.send(f"Произошла ошибка: {str(e)}", ephemeral=True)
 
+
+@tasks.loop(seconds=config['time_sleep'])
+async def rotate_status():
+    for activity_type, names in (
+        (discord.ActivityType.playing,  config['status_playing']),
+        (discord.ActivityType.watching, config['status_watching']),
+        (discord.ActivityType.listening, config['status_listening']),
+    ):
+        try:
+            # вот тут каждый раз берётся случайный элемент из нужного списка
+            choice = random.choice(names)
+            await bot.change_presence(
+                status=discord.Status.online,
+                activity=discord.Activity(name=choice, type=activity_type)
+            )
+        except ConnectionResetError:
+            logging.critical("Потеря соединения при смене статуса", exc_info=True)
+        # ждём перед переходом к следующему типу
+        await asyncio.sleep(config['time_sleep'])
+
+
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     send_commands_to_api()
+
+    # синхронизация команд
     try:
         synced = await bot.tree.sync()
         print(f'Synced {len(synced)} command(s)')
     except Exception as e:
         print(e)
     print('------')
-    webhook1 = DiscordWebhook(url=config['webhook_dev'], content=f'Бот {bot.user} запущен')
-    response = webhook1.execute()
-    webhook2 = DiscordWebhook(url=config['webhook_pk'], content=f'Бот {bot.user} запущен')
-    response = webhook2.execute()
-    while True:
-        try:
-            await bot.change_presence(status=discord.Status.online, activity=discord.Activity(
-                name=random.choice(config['status_playing']), type=discord.ActivityType.playing))
-            await sleep(config['time_sleep'])
-            await bot.change_presence(status=discord.Status.online, activity=discord.Activity(
-                name=random.choice(config['status_watching']), type=discord.ActivityType.watching))
-            await sleep(config['time_sleep'])
-            await bot.change_presence(status=discord.Status.online, activity=discord.Activity(
-                name=random.choice(config['status_listening']), type=discord.ActivityType.listening))
-            await sleep(config['time_sleep'])
-        except Exception as e:
-            logging.critical("Ошибка при смене статусов: ", exc_info=True)
+
+    # оповещения вебхуками
+    for url in (config['webhook_dev'], config['webhook_pk']):
+        DiscordWebhook(url=url, content=f'Бот {bot.user} запущен').execute()
+
+    # старт фонового таска, если он ещё не запущен
+    if not rotate_status.is_running():
+        rotate_status.start()
 
 def slash_command_check():
     async def predicate(interaction: discord.Interaction):
