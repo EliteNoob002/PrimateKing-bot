@@ -482,12 +482,10 @@ async def gpt_art(interaction: discord.Interaction, user_input: str):
         await interaction.followup.send(f'Ошибка при получении URL изображения: {str(ve)}')
         logging.error(str(ve))
     except Exception as e:
-        if str(e) == "Промт не проходит проверку Яндекса":
-            await interaction.followup.send('Промт не проходит проверку Яндекса')
-        else:
-            await interaction.followup.send(f'Ошибка при обращении к функции YandexGPT ART: {str(e)}')
-            logging.error(f"Ошибка YandexGPT ART: {str(e)}")
-        raise
+        from yandexgptart import translate_yandex_error  # если функция в другом файле
+        translated = translate_yandex_error(str(e))
+        await interaction.followup.send(f'❗ {translated}')
+        logging.error(f"Ошибка YandexGPT ART: {str(e)}")
 
 async def check_image(url: str) -> bool:
     async with aiohttp.ClientSession() as session:

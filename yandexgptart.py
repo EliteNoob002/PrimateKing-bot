@@ -7,6 +7,7 @@ import random
 from datetime import datetime
 import os
 import json
+from yandex_errors import translate_yandex_error
 
 with open("config.yml", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
@@ -34,18 +35,21 @@ async def post_image_generation(session, user_input):
             }
         ]
     }
+
     async with session.post(url_generate, headers=headers, json=data) as response:
-        response_json = await response.json()  # Awaiting the response JSON
+        response_json = await response.json()
+
         if response.status == 200:
             answer_id = response_json["id"]
             logging.info(f'id запроса для генерации картинки получен')
             return answer_id
-        elif 'error' in response_json and response_json['error'] == "it is not possible to generate an image from this request because it may violate the terms of use":
-            logging.info(f'Промт не прошёл проверку Яндекса')
-            return False
+        elif 'error' in response_json:
+            error_text = response_json['error']
+            logging.warning(f'Ошибка генерации изображения: {error_text}')
+            raise Exception(error_text)  # <-- выбрасываем исключение с текстом ошибки
         else:
-            logging.error(f"Ошибка POST запроса yandexgpt ART API. Код ошибки: {response.status}, Текст: {await response.text()}")
-            return None
+            logging.error(f"Неизвестная ошибка: {response.status}, Тело: {await response.text()}")
+            raise Exception("Неизвестная ошибка при генерации изображения")
 
 async def fetch_operation_status(session, operation_id):
     url_get = f"https://llm.api.cloud.yandex.net:443/operations/{operation_id}"
@@ -97,26 +101,18 @@ async def generate_and_save_image(user_input, user):
     async with aiohttp.ClientSession() as session:
         # Отправка запроса на генерацию изображения
         operation_id = await post_image_generation(session, user_input)
-        if not operation_id:
-            raise Exception("Промт не проходит проверку Яндекса")
         
         # Цикл проверки состояния операции
         while True:
             image_base64 = await fetch_operation_status(session, operation_id)
             if image_base64:
-                # Сохранение изображения
                 image_path = await save_image(image_base64, user)
-                
-                # Загрузка изображения на сервер
                 image_url = await upload_to_server(image_path, user)
-                
+
                 if not image_url:
                     raise ValueError("Возникла ошибка при получении URL изображения")
-                
-                # Удаление локального файла
+
                 os.remove(image_path)
-                
-                # Возвращаем URL загруженного изображения
                 return image_url
             else:
                 await asyncio.sleep(10)
