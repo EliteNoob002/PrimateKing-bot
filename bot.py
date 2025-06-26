@@ -385,24 +385,35 @@ async def restart(interaction: discord.Interaction):
 @bot.tree.command(name="update", description="Обновление файлов бота")
 @slash_command_check()
 async def update(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)  # <-- добавляем defer сразу
+
     if interaction.user.id == config['admin']:
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду update')
         send_telegram_notification(
             f"\u2705 *Успех:* {interaction.user.mention} ({interaction.user.name}) использовал команду /update"
         )
+
         client_ssh.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
         stdin, stdout, stderr = client_ssh.exec_command('cd PrimateKing-bot \n git pull')
         data = stdout.read().decode()
         stdin.close()
-        await interaction.response.send_message(f' Эй {interaction.user.mention}! Вот результат {data}',
-        ephemeral=True) 
+
+        await interaction.followup.send(  # <- send через followup после defer
+            f'Эй {interaction.user.mention}! Вот результат:\n```bash\n{data}\n```',
+            ephemeral=True
+        )
+
     else:
-        logging.info(f'{interaction.user.mention} {interaction.user.name} попытался ипользовать команду update')
+        logging.info(f'{interaction.user.mention} {interaction.user.name} попытался использовать команду update')
         send_telegram_notification(
             f"\u26a0 *Попытка доступа:* {interaction.user.mention} ({interaction.user.name}) попытался использовать команду /update без прав."
         )
-        await interaction.response.send_message(f'У тебя нет доступа к этой команде',
-        ephemeral=True)
+
+        await interaction.followup.send(  # тоже через followup
+            f'⛔ У тебя нет доступа к этой команде.',
+            ephemeral=True
+        )
+
 
 @bot.tree.command(name="help", description="Список доступных команд")
 @slash_command_check()
