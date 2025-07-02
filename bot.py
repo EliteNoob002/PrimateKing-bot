@@ -490,12 +490,12 @@ async def gpt_art(interaction: discord.Interaction, user_input: str):
         await interaction.followup.send(embed=embed, view=view)
         bot.add_view(view)  # Регистрируем view для постоянного отслеживания
     except ValueError as ve:
-        await interaction.followup.send(f'Ошибка при получении URL изображения: {str(ve)}')
+        await interaction.followup.send(f'Ошибка при получении URL изображения: {str(ve)}', ephemeral=True)
         logging.error(str(ve))
     except Exception as e:
         from yandexgptart import translate_yandex_error  # если функция в другом файле
         translated = translate_yandex_error(str(e))
-        await interaction.followup.send(f'❗ {translated}')
+        await interaction.followup.send(f'❗ {translated}', ephemeral=True)
         logging.error(f"Ошибка YandexGPT ART: {str(e)}")
 
 async def check_image(url: str) -> bool:
