@@ -18,7 +18,7 @@ import requests
 import json
 import inspect
 from datetime import datetime
-
+import functools
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -62,11 +62,6 @@ GIF_URLS = config['gif_urls']  # Список GIF-ссылок, на котор�
 API_URL = config['my_api_url']
 
 bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
-
-# Декоратор для проверки включенности функции 
-import functools
-import requests
-import logging
 
 def function_enabled_check(function_name: str):
     def decorator(callback):
@@ -764,6 +759,24 @@ async def info_error(ctx, error): # если $послать юзер не на�
 
 @bot.command() #комманда без проверки роли
 async def testo(ctx, *arg):
-    await ctx.reply(random.randint(1000, 2000))   
+    await ctx.reply(random.randint(1000, 2000))
+
+@bot.event
+async def on_message_delete(message: discord.Message):
+    if message.author.bot:
+        return
+
+    attachments = "\n               ".join([att.url for att in message.attachments]) if message.attachments else "Нет"
+    
+    logging.info(
+        f"Удалено сообщение от {message.author} в #{message.channel.name}\n"
+        f"────────────────────────────────────────────────────────\n"
+        f"Автор:        {message.author} (ID: {message.author.id})\n"
+        f"Канал:        {message.channel.name} (ID: {message.channel.id})\n"
+        f"Время:        {message.created_at}\n"
+        f"Содержимое:   {repr(message.content) if message.content else '[пусто]'}\n"
+        f"Вложения:     {attachments}\n"
+        f"────────────────────────────────────────────────────────"
+    )   
 
 bot.run(config['token'])
