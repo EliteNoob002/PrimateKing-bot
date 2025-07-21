@@ -17,7 +17,7 @@ import yandexgptart
 import requests
 import json
 import inspect
-from datetime import datetime
+from datetime import datetime, timezone
 import functools
 from io import StringIO
 
@@ -767,62 +767,72 @@ async def on_message_delete(message: discord.Message):
     if message.author.bot:
         return
 
-    # Получаем канал логов
     log_channel = bot.get_channel(1396859532222660789)
     if not log_channel:
         logging.warning("Не удалось найти канал логов удалённых сообщений.")
         return
 
-    # Вложения
-    attachments = "\n               ".join([att.url for att in message.attachments]) if message.attachments else "Нет"
-
-    # Базовая инфа
+    # Информация
     author_info = f"{message.author} (ID: {message.author.id})"
     channel_info = f"#{message.channel.name} (ID: {message.channel.id})"
     created_info = str(message.created_at)
     message_id = message.id
+    attachments = "\n               ".join([att.url for att in message.attachments]) if message.attachments else "Нет"
+    text = message.content or ""
 
-    # Embed
+    # Создаём embed
     embed = discord.Embed(
         title="🗑️ Сообщение удалено",
         color=discord.Color.red(),
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
     embed.add_field(name="Автор", value=author_info, inline=False)
     embed.add_field(name="Канал", value=channel_info, inline=False)
     embed.add_field(name="Вложения", value=attachments, inline=False)
     embed.set_footer(text=f"ID сообщения: {message_id}")
 
-    # Формируем лог для файла
-    if message.content and len(message.content) <= 1000:
-        embed.add_field(name="Содержимое", value=message.content, inline=False)
+    # 1. Короткое сообщение — в embed
+    if 0 < len(text) <= 1000:
+        embed.add_field(name="Содержимое", value=text, inline=False)
+        await log_channel.send(embed=embed)
 
         logging.info(
             f"Удалено сообщение от {author_info} в {channel_info}\n"
             f"────────────────────────────────────────────────────────\n"
             f"Время:        {created_info}\n"
-            f"Содержимое:   {repr(message.content)}\n"
+            f"Содержимое:   {repr(text)}\n"
             f"Вложения:     {attachments}\n"
             f"────────────────────────────────────────────────────────"
         )
 
+    # 2. Длинное сообщение — embed + txt в отдельном сообщении
+    elif len(text) > 1000:
         await log_channel.send(embed=embed)
 
-    else:
-        # Длинное сообщение — отправляем как файл
-        content_text = message.content if message.content else "[пусто]"
-        file_buffer = StringIO(content_text)
+        file_buffer = StringIO(text)
         file = discord.File(fp=file_buffer, filename=f"deleted_message_{message_id}.txt")
+        await log_channel.send(file=file)
 
         logging.info(
             f"Удалено длинное сообщение от {author_info} в {channel_info}\n"
             f"────────────────────────────────────────────────────────\n"
             f"Время:        {created_info}\n"
-            f"Содержимое:   [добавлено как файл deleted_message_{message_id}.txt]\n"
+            f"Содержимое:   [сохранено как файл deleted_message_{message_id}.txt]\n"
             f"Вложения:     {attachments}\n"
             f"────────────────────────────────────────────────────────"
         )
 
-        await log_channel.send(embed=embed, file=file) 
+    # 3. Сообщение без текста
+    else:
+        await log_channel.send(embed=embed)
+
+        logging.info(
+            f"Удалено сообщение без текста от {author_info} в {channel_info}\n"
+            f"────────────────────────────────────────────────────────\n"
+            f"Время:        {created_info}\n"
+            f"Содержимое:   [нет текста]\n"
+            f"Вложения:     {attachments}\n"
+            f"────────────────────────────────────────────────────────"
+        )
 
 bot.run(config['token'])
