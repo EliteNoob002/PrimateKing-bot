@@ -20,6 +20,7 @@ import inspect
 from datetime import datetime, timezone
 import functools
 from io import StringIO
+from aiohttp import BasicAuth
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -35,10 +36,26 @@ with open("config.yml", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
 
 
-intents = discord.Intents.default() # Подключаем "Разрешения"
+proxy = None
+proxy_auth = None
+if config.get('discord_proxy_enabled'):
+    proxy = config.get('discord_proxy_url')
+    user = config.get('discord_proxy_user')
+    pwd  = config.get('discord_proxy_pass')
+    if user and pwd and "@" not in (proxy or ""):
+        proxy_auth = BasicAuth(user, pwd)
+
+intents = discord.Intents.default()
 intents.message_content = True
-client = discord.Client(intents=intents)
-tree = app_commands.CommandTree(client)
+
+
+bot = commands.Bot(
+    command_prefix=config['prefix'],
+    owner_id=config['admin'],
+    intents=intents,
+    proxy=proxy,
+    proxy_auth=proxy_auth
+)
 
 
 host_ssh = config['host_ssh']
@@ -185,7 +202,7 @@ def slash_command_check():
 @commands.has_role("Тест1") #команда teste с проверкой роли "тест1"
 async def teste(ctx, *arg):
     client_ssh.connect(hostname=config['host_ssh'], username=config['user_ssh'], password=config['password_ssh'], port=config['port'])
-    stdin, stdout, stderr = client.exec_command('ls -l \n')
+    stdin, stdout, stderr = client_ssh.exec_command('ls -l \n')
     data = stdout.read() + stderr.read()
     client_ssh.close()
     await ctx.reply(f'Ответ ssh: {data}')
