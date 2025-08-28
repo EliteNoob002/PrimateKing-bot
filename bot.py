@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import functools
 from io import StringIO
 from aiohttp import BasicAuth
+import discord.http as dhttp
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
@@ -36,25 +37,62 @@ with open("config.yml", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
 
 
+# --- Прокси из конфига---
 proxy = None
 proxy_auth = None
 if config.get('discord_proxy_enabled'):
     proxy = config.get('discord_proxy_url')
     user = config.get('discord_proxy_user')
     pwd  = config.get('discord_proxy_pass')
-    if user and pwd and "@" not in (proxy or ""):
+    if user and pwd and proxy and "@" not in proxy:
         proxy_auth = BasicAuth(user, pwd)
+
+# --- Принудительный прокси для всех REST-запросов discord.py ---
+_orig_request = dhttp.HTTPClient.request
+
+async def _proxied_request(self, route, **kwargs):
+    # таймаут по умолчанию
+    kwargs.setdefault("timeout", aiohttp.ClientTimeout(total=20))
+    # чуть стабильности с некоторыми проксями
+    headers = kwargs.setdefault("headers", {})
+    headers.setdefault("Connection", "close")
+    # прокси (если включён)
+    if proxy:
+        kwargs.setdefault("proxy", proxy)
+        if proxy_auth:
+            kwargs.setdefault("proxy_auth", proxy_auth)
+    try:
+        return await _orig_request(self, route, **kwargs)
+    except Exception:
+        logging.exception("Discord HTTP error on %s %s", route.method, route.url)
+        raise
+
+dhttp.HTTPClient.request = _proxied_request
+
+# --- Принудительный прокси для WebSocket-подключений (gateway) ---
+_orig_ws_connect = dhttp.HTTPClient.ws_connect
+
+async def _proxied_ws_connect(self, url, **kwargs):
+    # у этой версии discord.py ws_connect не принимает proxy в kwargs —
+    # ставим на атрибуты клиента
+    if proxy:
+        self.proxy = proxy
+        self.proxy_auth = proxy_auth
+    try:
+        return await _orig_ws_connect(self, url, **kwargs)
+    except Exception:
+        logging.exception("Discord WS error connect to %s", url)
+        raise
+
+dhttp.HTTPClient.ws_connect = _proxied_ws_connect
 
 intents = discord.Intents.default()
 intents.message_content = True
-
 
 bot = commands.Bot(
     command_prefix=config['prefix'],
     owner_id=config['admin'],
     intents=intents,
-    proxy=proxy,
-    proxy_auth=proxy_auth
 )
 
 
@@ -78,8 +116,6 @@ TG_CHAT_ID = config['tg_chat_id']
 GIF_URLS = config['gif_urls']  # Список GIF-ссылок, на которые реагируем
 
 API_URL = config['my_api_url']
-
-bot = commands.Bot(command_prefix=config['prefix'], owner_id=config['admin'] , intents=intents)
 
 def function_enabled_check(function_name: str):
     def decorator(callback):
@@ -164,7 +200,6 @@ async def rotate_status():
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
-    send_commands_to_api()
 
     # синхронизация команд
     try:
@@ -174,14 +209,29 @@ async def on_ready():
         print(e)
     print('------')
 
-    # оповещения вебхуками
-    for url in (config['webhook_dev'], config['webhook_pk']):
-        DiscordWebhook(url=url, content=f'Бот {bot.user} запущен').execute()
+    # оповещения вебхуками (не роняем бота при ошибках)
+    for url in (config.get('webhook_dev'), config.get('webhook_pk')):
+        if not url:
+            continue
+        try:
+            DiscordWebhook(url=url, content=f'Бот {bot.user} запущен').execute()
+        except Exception as e:
+            logging.error("Webhook error: %s", e)
 
-    # старт фонового таска, если он ещё не запущен
+    # синхронизация списка команд с вашим API — в фоне, чтобы не блокировать on_ready
+    async def _sync_api():
+        try:
+            await asyncio.sleep(1)
+            await asyncio.to_thread(send_commands_to_api)
+        except Exception:
+            logging.exception("Ошибка при синхронизации команд с API")
+
+    asyncio.create_task(_sync_api())
+
+    # старт фонового таска статусов
     if not rotate_status.is_running():
         rotate_status.start()
-
+        
 def slash_command_check():
     async def predicate(interaction: discord.Interaction):
         command_name = interaction.command.name
@@ -696,45 +746,48 @@ def parse_commands_and_functions():
 
 # Функция для отправки команд в API
 def send_commands_to_api():
+    url = f"{API_URL}/bot/items"
+    headers = {"Content-Type": "application/json"}
+
     try:
-        # Получаем список текущих команд
         commands_list = parse_commands_and_functions()
-        url = f"{API_URL}/bot/items"
-        headers = {"Content-Type": "application/json"}
+    except Exception as e:
+        logging.error("parse_commands_and_functions() failed: %s", e, exc_info=True)
+        return
 
-        # Получаем список существующих команд из API
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        existing_commands = {item["name"] for item in response.json()}
+    # Получаем существующие команды
+    try:
+        resp = requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        existing_commands = {item["name"] for item in resp.json()}
+    except Exception as e:
+        logging.warning("API %s недоступен: %s — пропускаю синхронизацию.", url, e)
+        return
 
-        # Фильтруем только новые команды (те, которых нет в API)
-        new_commands = [
-            {
-                "name": command['name'],
-                "type": command['type'],
-                "enabled": command.get('enabled', True),
-                "description": command.get('description', '')
-            }
-            for command in commands_list if command["name"] not in existing_commands
-        ]
+    # Фильтруем новые
+    new_commands = [
+        {
+            "name": cmd['name'],
+            "type": cmd['type'],
+            "enabled": cmd.get('enabled', True),
+            "description": cmd.get('description', '')
+        }
+        for cmd in commands_list
+        if cmd["name"] not in existing_commands
+    ]
 
-        if not new_commands:
-            logging.info("Нет новых команд для отправки в API.")
-            return
+    if not new_commands:
+        logging.info("Нет новых команд для отправки в API.")
+        return
 
-        # Логируем данные запроса перед отправкой
-        logging.debug(f"Отправка команд в API: {new_commands}")
-
-        # Отправляем новые команды в API
-        response = requests.post(url, json=new_commands, headers=headers)
-        response.raise_for_status()
-        logging.info("Команды успешно отправлены в API.")
-
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Ошибка при отправке команд в API: {e}", exc_info=True)
-        logging.error(f"Запрос: URL={url}, Headers={headers}, Данные={new_commands}")
-        if response.text:
-            logging.error(f"Ответ от API: {response.text}")
+    # Отправляем новые
+    try:
+        resp = requests.post(url, json=new_commands, headers=headers, timeout=10)
+        resp.raise_for_status()
+        logging.info("Команды успешно отправлены в API (%d шт).", len(new_commands))
+    except Exception as e:
+        logging.error("Не удалось отправить команды в API: %s", e)
+        logging.debug("Payload отправки: %s", new_commands)
 
 @bot.check
 async def global_command_check(ctx: commands.Context):
