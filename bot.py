@@ -137,6 +137,17 @@ def function_enabled_check(function_name: str):
     return decorator
 
 
+async def _post_discord_webhook(url: str, content: str):
+    timeout = aiohttp.ClientTimeout(total=8)
+    async with aiohttp.ClientSession(timeout=timeout) as s:
+        kw = {}
+        # Если прокси включён — гоняем вебхуки через него (это тоже Discord)
+        if proxy and ("discord.com" in url or "discordapp.com" in url):
+            kw["proxy"] = proxy
+            if proxy_auth:
+                kw["proxy_auth"] = proxy_auth
+        await s.post(url, json={"content": content}, **kw)
+
 # Класс View с кнопками
 class ImageView(discord.ui.View):
     def __init__(self, image_url: str, prompt: str):
@@ -209,28 +220,30 @@ async def on_ready():
         print(e)
     print('------')
 
-    # оповещения вебхуками (не роняем бота при ошибках)
+    tasks = []
     for url in (config.get('webhook_dev'), config.get('webhook_pk')):
-        if not url:
-            continue
-        try:
-            DiscordWebhook(url=url, content=f'Бот {bot.user} запущен').execute()
-        except Exception as e:
-            logging.error("Webhook error: %s", e)
+        if url:
+            tasks.append(_post_discord_webhook(url, f'Бот {bot.user} запущен'))
 
-    # синхронизация списка команд с вашим API — в фоне, чтобы не блокировать on_ready
+    if tasks:
+        async def _fanout():
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception):
+                    logging.error("Webhook send failed: %s", r)
+        asyncio.create_task(_fanout())
+
+    # старт фонового таска статусов
+    if not rotate_status.is_running():
+        rotate_status.start()
+
     async def _sync_api():
         try:
             await asyncio.sleep(1)
             await asyncio.to_thread(send_commands_to_api)
         except Exception:
             logging.exception("Ошибка при синхронизации команд с API")
-
     asyncio.create_task(_sync_api())
-
-    # старт фонового таска статусов
-    if not rotate_status.is_running():
-        rotate_status.start()
         
 def slash_command_check():
     async def predicate(interaction: discord.Interaction):
