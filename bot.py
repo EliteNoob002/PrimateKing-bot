@@ -10,7 +10,7 @@ from asyncio import sleep
 from discord_webhook import DiscordWebhook
 from openai import AsyncOpenAI
 from typing import Optional
-import aiohttp
+import aiohttp, socket
 import asyncio
 import yandexgpt
 import yandexgptart
@@ -51,12 +51,12 @@ if config.get('discord_proxy_enabled'):
 _orig_request = dhttp.HTTPClient.request
 
 async def _proxied_request(self, route, **kwargs):
-    # таймаут по умолчанию
-    kwargs.setdefault("timeout", aiohttp.ClientTimeout(total=20))
-    # чуть стабильности с некоторыми проксями
-    headers = kwargs.setdefault("headers", {})
-    headers.setdefault("Connection", "close")
-    # прокси (если включён)
+    kwargs.setdefault("timeout", aiohttp.ClientTimeout(
+        total=45,
+        connect=30,
+        sock_connect=30,
+        sock_read=30,
+    ))
     if proxy:
         kwargs.setdefault("proxy", proxy)
         if proxy_auth:
@@ -121,6 +121,29 @@ TG_CHAT_ID = config['tg_chat_id']
 GIF_URLS = config['gif_urls']  # Список GIF-ссылок, на которые реагируем
 
 API_URL = config['my_api_url']
+
+
+# --- HTTP-сессия для REST Discord с расширенными таймаутами и IPv4 ---
+
+async def _ensure_http_session(client):
+    sess = getattr(client.http, "_HTTPClient__session", None)
+    if (not isinstance(sess, aiohttp.ClientSession)) or getattr(sess, "closed", True):
+        connector = aiohttp.TCPConnector(
+            family=socket.AF_INET,
+            ttl_dns_cache=300,
+            force_close=False,
+        )
+        default_timeout = aiohttp.ClientTimeout(
+            total=None,
+            connect=60,
+            sock_connect=60,
+            sock_read=60,
+        )
+        client.http._HTTPClient__session = aiohttp.ClientSession(
+            connector=connector,
+            timeout=default_timeout,
+        )
+
 
 def function_enabled_check(function_name: str):
     def decorator(callback):
@@ -221,6 +244,7 @@ async def rotate_status():
 
 @bot.event
 async def on_ready():
+    await _ensure_http_session(bot)
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
 
     # синхронизация команд
