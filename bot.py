@@ -23,7 +23,7 @@ from io import StringIO
 from aiohttp import BasicAuth, ClientConnectionError
 import discord.http as dhttp
 
-logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
+logging.basicConfig(level=logging.DEBUG, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
 logging.debug("A DEBUG Message")
 logging.info("An INFO")
@@ -47,26 +47,41 @@ if config.get('discord_proxy_enabled'):
     if user and pwd and proxy and "@" not in proxy:
         proxy_auth = BasicAuth(user, pwd)
 
+# --- Форс-прокси для interaction/webhook запросов (discord.webhook.async_) ---
+import discord.webhook.async_ as dwh_async
+
+_orig_wh_request = dwh_async.AsyncWebhookAdapter.request
+
+async def _proxied_wh_request(self, route, *args, **kwargs):
+    # Жёстко подставляем прокси для ВСЕХ вызовов адаптера (interactions, followups, webhooks)
+    if proxy:
+        kwargs["proxy"] = proxy
+        if proxy_auth:
+            kwargs["proxy_auth"] = proxy_auth
+    return await _orig_wh_request(self, route, *args, **kwargs)
+
+dwh_async.AsyncWebhookAdapter.request = _proxied_wh_request
+
 # --- Принудительный прокси для всех REST-запросов discord.py ---
 _orig_request = dhttp.HTTPClient.request
 
 async def _proxied_request(self, route, **kwargs):
-    kwargs.setdefault("timeout", aiohttp.ClientTimeout(
-        total=70,
-        connect=60,
-        sock_connect=60,
-        sock_read=60,
-    ))
+    # Таймауты дружелюбные к прокси
+    kwargs["timeout"] = kwargs.get("timeout") or aiohttp.ClientTimeout(
+        total=70, connect=60, sock_connect=60, sock_read=60
+    )
+
+    # ВАЖНО: форсим прокси, а не setdefault
     if proxy:
-        kwargs.setdefault("proxy", proxy)
+        kwargs["proxy"] = proxy
         if proxy_auth:
-            kwargs.setdefault("proxy_auth", proxy_auth)
+            kwargs["proxy_auth"] = proxy_auth
 
     attempt = 0
     last_exc = None
     while attempt < 3:
         attempt += 1
-        logging.info("REST %s %s proxy=%s attempt=%s",
+        logging.debug("REST %s %s proxy=%s attempt=%s",
                      route.method, route.url, kwargs.get("proxy"), attempt)
         try:
             return await _orig_request(self, route, **kwargs)
@@ -75,10 +90,10 @@ async def _proxied_request(self, route, **kwargs):
                 asyncio.TimeoutError,
                 aiohttp.ClientOSError) as e:
             last_exc = e
-            logging.error("Discord HTTP error on %s %s: %s",
-                          route.method, route.url, repr(e))
+            logging.error("Discord HTTP error on %s %s: %r",
+                          route.method, route.url, e)
             await asyncio.sleep(min(5 * attempt, 10))
-        except Exception as e:
+        except Exception:
             logging.exception("Discord HTTP fatal on %s %s", route.method, route.url)
             raise
     raise last_exc
@@ -90,17 +105,15 @@ dhttp.HTTPClient.request = _proxied_request
 _orig_ws_connect = dhttp.HTTPClient.ws_connect
 
 async def _proxied_ws_connect(self, url, **kwargs):
-    # Задаём heartbeat/autoping и новые таймауты через ClientWSTimeout
-    kwargs.setdefault("autoping", True)
-    kwargs.setdefault("heartbeat", 30.0)
-    ws_timeout = aiohttp.ClientWSTimeout(ws_close=60.0, ws_receive=75.0)
-    kwargs["timeout"] = ws_timeout
+    kwargs["autoping"] = True
+    kwargs["heartbeat"] = 30.0
+    kwargs["timeout"] = aiohttp.ClientWSTimeout(ws_close=60.0, ws_receive=75.0)
 
+    # Жёстко подставляем прокси
     if proxy:
-        kwargs.setdefault("proxy", proxy)
+        kwargs["proxy"] = proxy
         if proxy_auth:
-            kwargs.setdefault("proxy_auth", proxy_auth)
-
+            kwargs["proxy_auth"] = proxy_auth
 
     try:
         session = getattr(self, "_HTTPClient__session", None)
