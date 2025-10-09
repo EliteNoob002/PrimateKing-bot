@@ -20,7 +20,7 @@ import inspect
 from datetime import datetime, timezone
 import functools
 from io import StringIO
-from aiohttp import BasicAuth
+from aiohttp import BasicAuth, ClientConnectionError
 import discord.http as dhttp
 
 logging.basicConfig(level=logging.INFO, filename="py_log.log",filemode="w",encoding='utf-8',
@@ -70,15 +70,20 @@ async def _proxied_request(self, route, **kwargs):
 dhttp.HTTPClient.request = _proxied_request
 
 # --- Принудительный прокси для WebSocket-подключений (gateway) ---
+
 _orig_ws_connect = dhttp.HTTPClient.ws_connect
 
 async def _proxied_ws_connect(self, url, **kwargs):
-    # у этой версии discord.py ws_connect не принимает proxy в kwargs —
-    # ставим на атрибуты клиента
-    if proxy:
-        self.proxy = proxy
-        self.proxy_auth = proxy_auth
+    # Задаём heartbeat/autoping и новые таймауты через ClientWSTimeout
+    kwargs.setdefault("autoping", True)
+    kwargs.setdefault("heartbeat", 30.0)
+    ws_timeout = aiohttp.ClientWSTimeout(ws_close=60.0, ws_receive=75.0)
+    kwargs["timeout"] = ws_timeout
+
     try:
+        session = getattr(self, "_HTTPClient__session", None)
+        if isinstance(session, aiohttp.ClientSession):
+            return await session.ws_connect(url, **kwargs)
         return await _orig_ws_connect(self, url, **kwargs)
     except Exception:
         logging.exception("Discord WS error connect to %s", url)
@@ -188,24 +193,30 @@ class ImageView(discord.ui.View):
             await interaction.followup.send(f"Произошла ошибка: {str(e)}", ephemeral=True)
 
 
-@tasks.loop(seconds=config['time_sleep'])
+@tasks.loop(seconds=None)
 async def rotate_status():
-    for activity_type, names in (
+    await bot.wait_until_ready()
+
+    pools = (
         (discord.ActivityType.playing,  config['status_playing']),
         (discord.ActivityType.watching, config['status_watching']),
         (discord.ActivityType.listening, config['status_listening']),
-    ):
-        try:
-            # вот тут каждый раз берётся случайный элемент из нужного списка
-            choice = random.choice(names)
-            await bot.change_presence(
-                status=discord.Status.online,
-                activity=discord.Activity(name=choice, type=activity_type)
-            )
-        except ConnectionResetError:
-            logging.critical("Потеря соединения при смене статуса", exc_info=True)
-        # ждём перед переходом к следующему типу
-        await asyncio.sleep(config['time_sleep'])
+    )
+
+    act_type, names = random.choice(pools)
+    name = random.choice(names)
+
+    try:
+        if not bot.is_ready() or bot.ws is None or getattr(bot.ws, "_closed", False):
+            return
+        await bot.change_presence(
+            status=discord.Status.online,
+            activity=discord.Activity(name=name, type=act_type)
+        )
+    except (ConnectionResetError, ClientConnectionError, discord.ConnectionClosed):
+        logging.critical("Потеря соединения при смене статуса", exc_info=True)
+
+    await asyncio.sleep(int(config['time_sleep']))
 
 
 @bot.event
