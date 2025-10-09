@@ -52,20 +52,36 @@ _orig_request = dhttp.HTTPClient.request
 
 async def _proxied_request(self, route, **kwargs):
     kwargs.setdefault("timeout", aiohttp.ClientTimeout(
-        total=45,
-        connect=30,
-        sock_connect=30,
-        sock_read=30,
+        total=70,
+        connect=60,
+        sock_connect=60,
+        sock_read=60,
     ))
     if proxy:
         kwargs.setdefault("proxy", proxy)
         if proxy_auth:
             kwargs.setdefault("proxy_auth", proxy_auth)
-    try:
-        return await _orig_request(self, route, **kwargs)
-    except Exception:
-        logging.exception("Discord HTTP error on %s %s", route.method, route.url)
-        raise
+
+    attempt = 0
+    last_exc = None
+    while attempt < 3:
+        attempt += 1
+        logging.info("REST %s %s proxy=%s attempt=%s",
+                     route.method, route.url, kwargs.get("proxy"), attempt)
+        try:
+            return await _orig_request(self, route, **kwargs)
+        except (aiohttp.ClientConnectorError,
+                aiohttp.ServerDisconnectedError,
+                asyncio.TimeoutError,
+                aiohttp.ClientOSError) as e:
+            last_exc = e
+            logging.error("Discord HTTP error on %s %s: %s",
+                          route.method, route.url, repr(e))
+            await asyncio.sleep(min(5 * attempt, 10))
+        except Exception as e:
+            logging.exception("Discord HTTP fatal on %s %s", route.method, route.url)
+            raise
+    raise last_exc
 
 dhttp.HTTPClient.request = _proxied_request
 
