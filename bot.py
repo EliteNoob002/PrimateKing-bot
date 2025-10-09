@@ -61,6 +61,7 @@ async def _proxied_request(self, route, **kwargs):
         kwargs.setdefault("proxy", proxy)
         if proxy_auth:
             kwargs.setdefault("proxy_auth", proxy_auth)
+    logging.debug("REST %s %s proxy=%s timeout=%s", route.method, route.url, kwargs.get("proxy"), kwargs.get("timeout"))
     try:
         return await _orig_request(self, route, **kwargs)
     except Exception:
@@ -74,11 +75,19 @@ dhttp.HTTPClient.request = _proxied_request
 _orig_ws_connect = dhttp.HTTPClient.ws_connect
 
 async def _proxied_ws_connect(self, url, **kwargs):
-    # Задаём heartbeat/autoping и новые таймауты через ClientWSTimeout
     kwargs.setdefault("autoping", True)
     kwargs.setdefault("heartbeat", 30.0)
-    ws_timeout = aiohttp.ClientWSTimeout(ws_close=60.0, ws_receive=75.0)
-    kwargs["timeout"] = ws_timeout
+    kwargs["timeout"] = aiohttp.ClientWSTimeout(ws_close=60.0, ws_receive=75.0)
+
+    if proxy:
+        kwargs.setdefault("proxy", proxy)
+        if proxy_auth:
+            kwargs.setdefault("proxy_auth", proxy_auth)
+
+    logging.debug(
+        "WS CONNECT url=%s proxy=%s heartbeat=%s timeout=%s",
+        url, kwargs.get("proxy"), kwargs.get("heartbeat"), kwargs.get("timeout")
+    )
 
     try:
         session = getattr(self, "_HTTPClient__session", None)
