@@ -23,6 +23,15 @@ from io import StringIO
 from aiohttp import BasicAuth, ClientConnectionError
 import discord.http as dhttp
 
+import io
+import time
+import uuid
+import re
+import os
+from urllib.parse import urlparse
+
+from yandex_errors import translate_yandex_error
+
 logging.basicConfig(level=logging.DEBUG, filename="py_log.log",filemode="w",encoding='utf-8',
                     format="%(asctime)s %(levelname)s %(message)s")
 logging.debug("A DEBUG Message")
@@ -189,15 +198,30 @@ def function_enabled_check(function_name: str):
                     f"{API_URL}/bot/commands/function/{function_name}",
                     timeout=3
                 )
-                data = response.json()
+
+                # Пытаемся прочитать JSON только если явно есть что читать
+                try:
+                    data = response.json()
+                except ValueError:
+                    logging.error(
+                        f"[Decorator] Некорректный JSON от API для {function_name}: "
+                        f"status={response.status_code}, text={response.text[:200]!r}"
+                    )
+                    # В этом случае просто считаем, что функция включена
+                    return await callback(*args, **kwargs)
+
                 if response.status_code == 200 and not data.get('enabled', True):
-                    return 
+                    return  # функция выключена
+
             except Exception as e:
                 logging.error(f"[Decorator] Ошибка проверки для {function_name}: {e}")
-                return
+                # При любой ошибке считаем, что функция включена, чтобы не ломать работу
+                return await callback(*args, **kwargs)
+
             return await callback(*args, **kwargs)
         return wrapper
     return decorator
+
 
 
 async def _post_discord_webhook(url: str, content: str):
@@ -625,24 +649,47 @@ async def gpt_art(interaction: discord.Interaction, user_input: str):
     try:
         await interaction.response.defer()
         logging.info(f"Начата генерация картинки. Промт: {user_input}")
-        gpt_img = await yandexgptart.generate_and_save_image(user_input, user)
+
+        gpt_img_url = await yandexgptart.generate_and_save_image(user_input, user)
+        logging.info(f"Ссылка на сгенерированное изображение: {gpt_img_url}")
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(gpt_img_url) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(f"Не удалось скачать изображение: HTTP {resp.status}")
+                image_bytes = await resp.read()
+
+        parsed = urlparse(gpt_img_url)
+        basename = os.path.basename(parsed.path)
+        _, ext = os.path.splitext(basename)
+        if not ext:
+            ext = ".jpeg"
+
+        safe_user = re.sub(r"[^a-zA-Z0-9]+", "", user.lower()) or "user"
+        timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+        rand = uuid.uuid4().hex[:6]
+        attachment_filename = f"gptart-{safe_user}-{timestamp}-{rand}{ext}"
+
+        file = discord.File(
+            fp=io.BytesIO(image_bytes),
+            filename=attachment_filename
+        )
+
         embed = discord.Embed(
             title="Сгенерированное изображение",
             description="Вот изображение, созданное на основе вашего запроса:",
             color=discord.Color.blue()
         )
-        embed.set_image(url=gpt_img)
-        view = ImageView(image_url=gpt_img, prompt=user_input)
-        await interaction.followup.send(embed=embed, view=view)
-        bot.add_view(view)  # Регистрируем view для постоянного отслеживания
-    except ValueError as ve:
-        await interaction.followup.send(f'Ошибка при получении URL изображения: {str(ve)}', ephemeral=True)
-        logging.error(str(ve))
+        embed.set_image(url=f"attachment://{attachment_filename}")
+
+        view = ImageView(image_url=gpt_img_url, prompt=user_input)
+        await interaction.followup.send(embed=embed, file=file, view=view)
+        bot.add_view(view)
+
     except Exception as e:
-        from yandexgptart import translate_yandex_error  # если функция в другом файле
         translated = translate_yandex_error(str(e))
         await interaction.followup.send(f'❗ {translated}', ephemeral=True)
-        logging.error(f"Ошибка YandexGPT ART: {str(e)}")
+        logging.error(f"Ошибка YandexGPT ART: {str(e)}", exc_info=True)
 
 async def check_image(url: str) -> bool:
     async with aiohttp.ClientSession() as session:
@@ -829,48 +876,105 @@ def parse_commands_and_functions():
 
 # Функция для отправки команд в API
 def send_commands_to_api():
-    url = f"{API_URL}/bot/items"
+    api_base = API_URL.rstrip("/")
+    url_get_commands = f"{api_base}/bot/commands"  # GET → чистые имена
+    url_post_items = f"{api_base}/bot/items"       # POST → создание/обновление
     headers = {"Content-Type": "application/json"}
 
+    # 1. Собираем актуальный список из кода бота
     try:
         commands_list = parse_commands_and_functions()
     except Exception as e:
         logging.error("parse_commands_and_functions() failed: %s", e, exc_info=True)
         return
 
-    # Получаем существующие команды
+    # множество (type, name) из бота
+    current_keys = {(cmd["type"], cmd["name"]) for cmd in commands_list}
+
+    # 2. Получаем список уже известных команд/функций из панели
     try:
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = requests.get(url_get_commands, headers=headers, timeout=5)
         resp.raise_for_status()
-        existing_commands = {item["name"] for item in resp.json()}
+        api_items = resp.json()  # [{'type': 'slash', 'name': 'gpt_art', ...}, ...]
+        existing_keys = {(item["type"], item["name"]) for item in api_items}
     except Exception as e:
-        logging.warning("API %s недоступен: %s — пропускаю синхронизацию.", url, e)
+        logging.warning(
+            "API %s недоступен или вернул ошибку: %s — пропускаю синхронизацию.",
+            url_get_commands,
+            e,
+        )
         return
 
-    # Фильтруем новые
-    new_commands = [
+    # 3. Что добавить/обновить, а что удалить
+
+    # Новые (есть в боте, нет в панели)
+    new_items = [
         {
-            "name": cmd['name'],
-            "type": cmd['type'],
-            "enabled": cmd.get('enabled', True),
-            "description": cmd.get('description', '')
+            "type": cmd["type"],
+            "name": cmd["name"],  # ЧИСТОЕ имя, префиксы добьёт backend
+            "enabled": cmd.get("enabled", True),
+            "description": cmd.get("description", ""),
         }
         for cmd in commands_list
-        if cmd["name"] not in existing_commands
+        if (cmd["type"], cmd["name"]) not in existing_keys
     ]
 
-    if not new_commands:
-        logging.info("Нет новых команд для отправки в API.")
+    # Устаревшие (есть в панели, но их больше нет в боте)
+    obsolete_keys = existing_keys - current_keys
+
+    if not new_items and not obsolete_keys:
+        logging.info("Синхронизация команд: изменений нет.")
         return
 
-    # Отправляем новые
-    try:
-        resp = requests.post(url, json=new_commands, headers=headers, timeout=10)
-        resp.raise_for_status()
-        logging.info("Команды успешно отправлены в API (%d шт).", len(new_commands))
-    except Exception as e:
-        logging.error("Не удалось отправить команды в API: %s", e)
-        logging.debug("Payload отправки: %s", new_commands)
+    # 4. Отправляем новые / обновлённые
+    if new_items:
+        try:
+            resp = requests.post(
+                url_post_items,
+                json=new_items,
+                headers=headers,
+                timeout=10,
+            )
+            resp.raise_for_status()
+            logging.info(
+                "Отправлено в API новых/обновлённых команд: %d шт.",
+                len(new_items),
+            )
+        except Exception as e:
+            logging.error("Не удалось отправить команды в API: %s", e)
+            logging.debug("Payload отправки: %s", new_items)
+
+    # 5. Удаляем те, которых больше нет в боте
+    for cmd_type, name in obsolete_keys:
+        try:
+            # name здесь — ЧИСТОЕ имя (как в /api/bot/commands)
+            del_url = f"{api_base}/bot/items/{cmd_type}/{name}"
+            resp = requests.delete(del_url, headers=headers, timeout=5)
+
+            if resp.status_code == 200:
+                logging.info("Удалена команда/функция из панели: type=%s, name=%s", cmd_type, name)
+            elif resp.status_code == 404:
+                logging.info(
+                    "Команда/функция уже отсутствует в панели: type=%s, name=%s",
+                    cmd_type,
+                    name,
+                )
+            else:
+                logging.warning(
+                    "Не удалось удалить %s/%s: HTTP %s %s",
+                    cmd_type,
+                    name,
+                    resp.status_code,
+                    resp.text[:200],
+                )
+        except Exception as e:
+            logging.error(
+                "Ошибка при удалении команды/функции %s/%s из панели: %s",
+                cmd_type,
+                name,
+                e,
+            )
+
 
 @bot.check
 async def global_command_check(ctx: commands.Context):
@@ -893,12 +997,35 @@ async def global_command_check(ctx: commands.Context):
 @bot.tree.error
 async def on_slash_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
-        await interaction.response.send_message(
-            "🚫 Эта команда временно отключена",
-            ephemeral=True
+        try:
+            await interaction.response.send_message(
+                "🚫 Эта команда временно отключена",
+                ephemeral=True
+            )
+        except discord.InteractionResponded:
+            await interaction.followup.send(
+                "🚫 Эта команда временно отключена",
+                ephemeral=True
+            )
+        return
+
+    # Разворачиваем оригинальное исключение, если это CommandInvokeError
+    original = getattr(error, "original", None)
+
+    if original is not None:
+        logging.error(
+            "Slash error in command %s: %r",
+            getattr(interaction.command, "name", "unknown"),
+            original,
+            exc_info=original,
         )
     else:
-        logging.error(f"Slash error: {error}")
+        logging.error(
+            "Slash error (wrapper): %r",
+            error,
+            exc_info=True,
+        )
+
 
 @poslat.error
 async def info_error(ctx, error): # если $послать юзер не найден
