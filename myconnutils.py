@@ -2,8 +2,10 @@ import mysql.connector
 from bestconfig import Config
 from mysql.connector import pooling
 from mysql.connector import Error
+from pathlib import Path
 
-config = Config() #config['version']
+CONFIG_PATH = Path(__file__).with_name("config.yml")
+config = Config(str(CONFIG_PATH))
 
 def _get_cfg(key: str):
     try:
