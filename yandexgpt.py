@@ -4,7 +4,7 @@ import yaml
 import logging
 import asyncio
 
-with open("config.yml", encoding='utf-8') as f:
+with open("config.yaml", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
 
 async def yandexgpt(user_input):

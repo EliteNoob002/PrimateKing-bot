@@ -9,7 +9,7 @@ import os
 import json
 from yandex_errors import translate_yandex_error
 
-with open("config.yml", encoding='utf-8') as f:
+with open("config.yaml", encoding='utf-8') as f:
     config = yaml.load(f, Loader=yaml.FullLoader,)
 
 url_generate = "https://llm.api.cloud.yandex.net/foundationModels/v1/imageGenerationAsync"

@@ -4,7 +4,7 @@ from mysql.connector import pooling
 from mysql.connector import Error
 from pathlib import Path
 
-CONFIG_PATH = Path(__file__).with_name("config.yml")
+CONFIG_PATH = Path(__file__).with_name("config.yaml")
 config = Config(str(CONFIG_PATH))
 
 def _get_cfg(key: str):

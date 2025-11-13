@@ -1,5 +1,5 @@
 sshtest.py
-config.yml
+config.yaml
 py_log.log
 /__pycache__
 /gpt_img
