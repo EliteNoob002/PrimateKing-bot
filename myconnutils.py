@@ -5,17 +5,24 @@ from mysql.connector import Error
 
 config = Config() #config['version']
 
+def _get_cfg(key: str):
+    try:
+        return config[key]
+    except KeyError:
+        raise RuntimeError(f"В bestconfig-конфиге нет ключа '{key}'. Проверь файл конфигурации для БД.")
+
 # Функция возвращает connection.
 def getConnection(): 
     try:
-        connection_pool = pooling.MySQLConnectionPool(pool_name="discord_pool",
-                                                    pool_size=2,
-                                                    pool_reset_session=True,
-                                                    host=config['host'],
-                                                    database=config['database'],
-                                                    user=config['user'],
-                                                    password=config['password'])
-
+        connection_pool = pooling.MySQLConnectionPool(
+            pool_name="discord_pool",
+            pool_size=2,
+            pool_reset_session=True,
+            host=_get_cfg('host_db'),
+            database=_get_cfg('database'),
+            user=_get_cfg('user_db'),
+            password=_get_cfg('password_db'),
+        )
         # Get connection object from a pool
         connection_object = connection_pool.get_connection()
 
