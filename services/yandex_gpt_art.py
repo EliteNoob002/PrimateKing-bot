@@ -1,16 +1,15 @@
+"""Генерация изображений через Yandex GPT Art"""
 import aiohttp
 import base64
 import asyncio
-import yaml
 import logging
 import random
 from datetime import datetime
 import os
-import json
-from yandex_errors import translate_yandex_error
+from utils.config import load_config
+from utils.errors import translate_yandex_error
 
-with open("config.yaml", encoding='utf-8') as f:
-    config = yaml.load(f, Loader=yaml.FullLoader,)
+config = load_config()
 
 url_generate = "https://llm.api.cloud.yandex.net/foundationModels/v1/imageGenerationAsync"
 headers = {
@@ -19,6 +18,7 @@ headers = {
 }
 
 async def post_image_generation(session, user_input):
+    """Отправляет запрос на генерацию изображения"""
     data = {
         "modelUri": f"art://{config['folder_id']}/yandex-art/latest",
         "generationOptions": {
@@ -46,12 +46,13 @@ async def post_image_generation(session, user_input):
         elif 'error' in response_json:
             error_text = response_json['error']
             logging.warning(f'Ошибка генерации изображения: {error_text}')
-            raise Exception(error_text)  # <-- выбрасываем исключение с текстом ошибки
+            raise Exception(error_text)
         else:
             logging.error(f"Неизвестная ошибка: {response.status}, Тело: {await response.text()}")
             raise Exception("Неизвестная ошибка при генерации изображения")
 
 async def fetch_operation_status(session, operation_id):
+    """Проверяет статус операции генерации"""
     url_get = f"https://llm.api.cloud.yandex.net:443/operations/{operation_id}"
     async with session.get(url_get, headers=headers) as response:
         if response.status == 200:
@@ -70,16 +71,19 @@ async def fetch_operation_status(session, operation_id):
             return None
 
 async def save_image(image_base64, user):
+    """Сохраняет изображение во временную папку"""
     image_data = base64.b64decode(image_base64)
     date = datetime.now().strftime("%Y%m%d_%H%M%S")
     image_path = f'gpt_img_temp/{user}_{date}.jpeg'
+    os.makedirs('gpt_img_temp', exist_ok=True)
     with open(image_path, 'wb') as file:
         file.write(image_data)
     logging.info(f'Сгенерированная картинка успешно сохранена')
     return image_path
 
 async def upload_to_server(file_path, user):
-    url = f"{config['upload_url']}"  # URL на ваш Nginx сервер
+    """Загружает изображение на сервер"""
+    url = f"{config['upload_url']}"
     async with aiohttp.ClientSession() as session:
         with open(file_path, 'rb') as file:
             original_filename = os.path.basename(file_path)
@@ -92,17 +96,16 @@ async def upload_to_server(file_path, user):
                     response_data = await response.json()
                     file_url = response_data.get('file_url')
                     logging.info(f'Файл {file_url} сохранен на сервере')
-                    return file_url # Предполагается, что сервер возвращает URL
+                    return file_url
                 else:
                     logging.error(f'Ошибка при загрузке файла на сервер. Код ошибки: {response.status}')
                     return False
 
 async def generate_and_save_image(user_input, user):
+    """Генерирует изображение и сохраняет его на сервере"""
     async with aiohttp.ClientSession() as session:
-        # Отправка запроса на генерацию изображения
         operation_id = await post_image_generation(session, user_input)
         
-        # Цикл проверки состояния операции
         while True:
             image_base64 = await fetch_operation_status(session, operation_id)
             if image_base64:
@@ -116,3 +119,4 @@ async def generate_and_save_image(user_input, user):
                 return image_url
             else:
                 await asyncio.sleep(10)
+
