@@ -1,6 +1,8 @@
+"""Перевод ошибок Yandex API"""
 import logging
 
 def translate_yandex_error(error_msg: str) -> str:
+    """Переводит ошибки Yandex API на русский язык"""
     msg_lower = error_msg.lower()
 
     TRANSLATION_KEYS = {
@@ -28,6 +30,6 @@ def translate_yandex_error(error_msg: str) -> str:
             logging.info(f"Переведена ошибка API: '{error_msg}' -> '{translation}'")
             return translation
 
-    # Логируем оригинальный непереведённый текст ошибки для анализа
     logging.warning(f"Неизвестная ошибка API: '{error_msg}'")
     return f"Неизвестная ошибка: {error_msg}"
+
