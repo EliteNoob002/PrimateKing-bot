@@ -40,6 +40,7 @@ async def check_image(url: str) -> bool:
 async def send_blin(target_user: discord.User, channel: discord.TextChannel, user: discord.User, text: Optional[str] = None):
     """Отправляет блин с говном"""
     logging.info(f'Выполнение функции send_blin начато')
+    image_url = None
     try:
         image_url = random.choice(config['pancake_url'])
 
@@ -55,7 +56,10 @@ async def send_blin(target_user: discord.User, channel: discord.TextChannel, use
         await channel.send(embed=embed)
     except Exception as e:
         if isinstance(e, ValueError):
-            logging.error(f'Картинка блина по URL {image_url} не доступна')
+            if image_url:
+                logging.error(f'Картинка блина по URL {image_url} не доступна')
+            else:
+                logging.error('Картинка блина не доступна: список pancake_url пуст или произошла ошибка при выборе URL')
         else:
             logging.error("Ошибка при выполнении функции send_blin ", exc_info=True)
         raise
@@ -125,8 +129,8 @@ def setup_slash_commands(bot):
     @app_commands.describe(target='Выберите цель')
     async def avatar(interaction: discord.Interaction, target: discord.Member):
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду avatar')
-        if target == None:
-            target = interaction.user.id
+        if target is None:
+            target = interaction.user
         embed = discord.Embed(color = 0x22ff00, title = f"Аватар участника - {target.name}", description = f"[Нажмите что бы скачать аватар]({target.avatar})")
         embed.set_image(url = target.avatar)
         await interaction.response.send_message(embed = embed)
