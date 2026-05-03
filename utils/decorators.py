@@ -1,8 +1,9 @@
 """Декораторы для команд"""
 import functools
-import requests
 import logging
+import requests
 from discord import app_commands
+from services.telegram import schedule_notify_api_panel_unreachable
 from utils.config import get_config
 
 API_URL = get_config('my_api_url')
@@ -32,6 +33,12 @@ def function_enabled_check(function_name: str):
 
             except Exception as e:
                 logging.error(f"[Decorator] Ошибка проверки для {function_name}: {e}")
+                schedule_notify_api_panel_unreachable(
+                    "decorator:function",
+                    function_name,
+                    e,
+                    API_URL,
+                )
                 return await callback(*args, **kwargs)
 
             return await callback(*args, **kwargs)
@@ -53,6 +60,12 @@ def slash_command_check():
             return True
         except Exception as e:
             logging.error(f"Slash check error: {e}")
+            schedule_notify_api_panel_unreachable(
+                "decorator:slash",
+                command_name,
+                e,
+                API_URL,
+            )
             return True
     return app_commands.check(predicate)
 

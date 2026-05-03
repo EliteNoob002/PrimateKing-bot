@@ -18,7 +18,7 @@ from utils.database import get_session
 from models.user import User
 from services.yandex_gpt import yandexgpt
 from services.yandex_gpt_art import generate_and_save_image
-from services.telegram import send_telegram_notification
+from services.telegram import await_telegram_notification
 from services.ssh import execute_ssh_command
 from services.api_sync import API_URL
 from utils.errors import translate_yandex_error
@@ -179,8 +179,9 @@ def setup_slash_commands(bot):
     async def restart(interaction: discord.Interaction):
         if interaction.user.id == config['admin']:
             logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду restartbot')
-            send_telegram_notification(
-                f"\u2705 *Успех:* {interaction.user.mention} ({interaction.user.name}) использовал команду /restartbot"
+            await await_telegram_notification(
+                f"{interaction.user.name} (id={interaction.user.id}) выполнил /restartbot.",
+                title="✅ Админ",
             )
             await interaction.response.send_message(
                 f'Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
@@ -189,8 +190,9 @@ def setup_slash_commands(bot):
             data = execute_ssh_command('systemctl restart botdis.service')
         else:
             logging.info(f'{interaction.user.mention} {interaction.user.name} попытался использовать команду restart')
-            send_telegram_notification(
-                f"\u26a0 *Попытка доступа:* {interaction.user.mention} ({interaction.user.name}) попытался использовать команду /restartbot без прав."
+            await await_telegram_notification(
+                f"{interaction.user.name} (id={interaction.user.id}) попытался вызвать /restartbot без прав.",
+                title="⚠️ Внимание",
             )
             await interaction.response.send_message(
                 f'У тебя нет доступа к этой команде',
@@ -204,8 +206,9 @@ def setup_slash_commands(bot):
 
         if interaction.user.id == config['admin']:
             logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду update')
-            send_telegram_notification(
-                f"\u2705 *Успех:* {interaction.user.mention} ({interaction.user.name}) использовал команду /update"
+            await await_telegram_notification(
+                f"{interaction.user.name} (id={interaction.user.id}) выполнил /update.",
+                title="✅ Админ",
             )
 
             data = execute_ssh_command('cd PrimateKing-bot \n git pull')
@@ -217,14 +220,36 @@ def setup_slash_commands(bot):
 
         else:
             logging.info(f'{interaction.user.mention} {interaction.user.name} попытался использовать команду update')
-            send_telegram_notification(
-                f"\u26a0 *Попытка доступа:* {interaction.user.mention} ({interaction.user.name}) попытался использовать команду /update без прав."
+            await await_telegram_notification(
+                f"{interaction.user.name} (id={interaction.user.id}) попытался вызвать /update без прав.",
+                title="⚠️ Внимание",
             )
 
             await interaction.followup.send(
                 f'⛔ У тебя нет доступа к этой команде.',
                 ephemeral=True
             )
+
+    @bot.tree.command(name="telegram_test", description="Тестовое уведомление в Telegram (только админ)")
+    @slash_command_check()
+    async def telegram_test(interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if interaction.user.id != config["admin"]:
+            await interaction.followup.send("У тебя нет доступа к этой команде.", ephemeral=True)
+            return
+        logging.info(
+            "%s %s вызвал telegram_test",
+            interaction.user.mention,
+            interaction.user.name,
+        )
+        await await_telegram_notification(
+            "Проверка канала: если вы видите это сообщение, отправка из бота работает.",
+            title="🔔 Тест Telegram",
+        )
+        await interaction.followup.send(
+            "Запрос отправки в Telegram выполнен. Проверьте чат (при ошибке смотрите py_log.log).",
+            ephemeral=True,
+        )
 
     @bot.tree.command(name="help", description="Список доступных команд")
     @slash_command_check()

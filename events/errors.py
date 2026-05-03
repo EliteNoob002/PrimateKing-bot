@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 import requests
 from services.api_sync import API_URL
+from services.telegram import schedule_notify_api_panel_unreachable
 
 def setup_error_handlers(bot):
     """Регистрирует обработчики ошибок"""
@@ -19,7 +20,9 @@ def setup_error_handlers(bot):
 
         try:
             # Проверяем команду по имени без префикса (как в API)
-            clean_name = ctx.command.name.lstrip('$')
+            clean_name = (
+                ctx.command.name.lstrip("$") if ctx.command else "unknown"
+            )
             response = requests.get(f"{API_URL}/bot/commands/prefix/{clean_name}", timeout=3)
             if response.status_code == 200:
                 data = response.json()
@@ -29,6 +32,12 @@ def setup_error_handlers(bot):
             return True
         except Exception as e:
             logging.error(f"Command check error: {e}")
+            schedule_notify_api_panel_unreachable(
+                "errors:prefix_check",
+                clean_name,
+                e,
+                API_URL,
+            )
             return True
     
     @bot.event
