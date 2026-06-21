@@ -298,7 +298,7 @@ def send_commands_to_api(bot) -> None:
         return
 
     settings = load_bootstrap_settings()
-    upsert_settings_to_mysql(commands_list, guild_id=settings.primary_guild_id)
+    upsert_settings_to_mysql(commands_list, guild_id=None)
 
     if bot.config_cache:
         bot.config_cache.reload()

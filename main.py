@@ -1,6 +1,10 @@
 """Точка входа Discord бота PrimateKing"""
 
+import json
 import logging
+from datetime import datetime, timezone
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 import discord
 from discord.ext import commands
@@ -17,14 +21,26 @@ from utils.database import init_db
 from utils.prefix import get_prefix
 from utils.proxy import setup_proxy
 
-logging.basicConfig(
-    level=logging.DEBUG, filename="py_log.log", filemode="w", encoding="utf-8", format="%(asctime)s %(levelname)s %(message)s"
-)
-logging.debug("A DEBUG Message")
-logging.info("An INFO")
-logging.warning("A WARNING")
-logging.error("An ERROR")
-logging.critical("A message of CRITICAL severity")
+
+class JsonLogFormatter(logging.Formatter):
+    def format(self, record):
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["stacktrace"] = self.formatException(record.exc_info)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+handler = RotatingFileHandler(log_dir / "bot.log", maxBytes=5_000_000, backupCount=3, encoding="utf-8")
+handler.setFormatter(JsonLogFormatter())
+logging.basicConfig(level=logging.INFO, handlers=[handler])
+logger = logging.getLogger("bot")
 
 settings = load_bootstrap_settings()
 
@@ -44,6 +60,10 @@ bot = commands.Bot(
 )
 
 config_cache = ConfigCache(ttl_seconds=settings.config_cache_ttl_seconds)
+try:
+    config_cache.reload()
+except Exception:
+    logger.exception("Initial ConfigCache reload failed")
 bot.config_cache = config_cache
 set_global_config_cache(config_cache)
 

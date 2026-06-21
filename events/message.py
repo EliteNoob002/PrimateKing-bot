@@ -56,7 +56,9 @@ def setup_message_events(bot):
         if message.author.bot:
             return
 
-        log_channel = bot.get_channel(1396859532222660789)
+        cache = getattr(bot, "config_cache", None)
+        channel_id = cache.get_log_channel_id(message.guild.id if message.guild else None) if cache else None
+        log_channel = bot.get_channel(channel_id) if channel_id else None
         if not log_channel:
             logging.warning("Не удалось найти канал логов удалённых сообщений.")
             return

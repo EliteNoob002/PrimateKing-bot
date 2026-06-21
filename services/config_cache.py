@@ -1,11 +1,9 @@
-"""Кэш runtime-настроек из MySQL.
+"""Кэш runtime-настроек из MySQL."""
 
-Бот и web-панель используют одну БД: панель пишет в таблицы настроек,
-бот перечитывает их с TTL (см. CONFIG_CACHE_TTL_SECONDS).
-"""
-
+import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from models.bot_setting import BotSetting
@@ -13,6 +11,8 @@ from models.command_setting import CommandSetting
 from models.function_setting import FunctionSetting
 from models.guild_setting import GuildSetting
 from utils.database import get_session
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_PREFIX = "$"
 
@@ -43,7 +43,17 @@ def get_global_config_cache() -> "ConfigCache | None":
 
 
 @dataclass
+class GuildRuntimeSettings:
+    prefix: str = DEFAULT_PREFIX
+    language: str = "ru"
+    log_channel_id: int | None = None
+    status_rotation_enabled: bool = True
+    status_rotation_interval: int = 60
+
+
+@dataclass
 class RuntimeConfig:
+    guild_settings: dict[int, GuildRuntimeSettings] = field(default_factory=dict)
     guild_prefixes: dict[int, str] = field(default_factory=dict)
     command_enabled: dict[str, bool] = field(default_factory=dict)
     function_enabled: dict[str, bool] = field(default_factory=dict)
@@ -55,6 +65,9 @@ class ConfigCache:
         self.ttl_seconds = ttl_seconds
         self._config = RuntimeConfig()
         self._loaded_at = 0.0
+        self.last_loaded_at: datetime | None = None
+        self.last_error: str | None = None
+        self.reload_count = 0
 
     def get_config(self) -> RuntimeConfig:
         now = time.monotonic()
@@ -63,37 +76,67 @@ class ConfigCache:
         return self._config
 
     def reload(self) -> None:
-        with get_session() as session:
-            guild_rows = session.query(GuildSetting).all()
-            command_rows = session.query(CommandSetting).all()
-            function_rows = session.query(FunctionSetting).all()
-            bot_rows = session.query(BotSetting).all()
+        try:
+            with get_session() as session:
+                guild_rows = session.query(GuildSetting).all()
+                command_rows = session.query(CommandSetting).all()
+                function_rows = session.query(FunctionSetting).all()
+                bot_rows = session.query(BotSetting).all()
 
-            guild_prefixes = {row.guild_id: row.prefix for row in guild_rows}
+                guild_settings: dict[int, GuildRuntimeSettings] = {}
+                guild_prefixes = {}
+                for row in guild_rows:
+                    guild_settings[row.guild_id] = GuildRuntimeSettings(
+                        prefix=row.prefix or DEFAULT_PREFIX,
+                        language=row.language or "ru",
+                        log_channel_id=row.log_channel_id,
+                        status_rotation_enabled=bool(row.status_rotation_enabled),
+                        status_rotation_interval=int(row.status_rotation_interval or 60),
+                    )
+                    guild_prefixes[row.guild_id] = row.prefix or DEFAULT_PREFIX
 
-            command_enabled = {
-                self._make_command_key(row.guild_id, row.command_type, row.command_name): row.enabled for row in command_rows
-            }
+                command_enabled = {
+                    self._make_command_key(row.guild_id, row.command_type, row.command_name): row.enabled
+                    for row in command_rows
+                }
+                function_enabled = {
+                    self._make_function_key(row.guild_id, row.function_name): row.enabled
+                    for row in function_rows
+                }
 
-            function_enabled = {self._make_function_key(row.guild_id, row.function_name): row.enabled for row in function_rows}
+                bot_settings = dict(DEFAULT_BOT_SETTINGS)
+                for row in bot_rows:
+                    bot_settings[row.setting_key] = row.value_json
 
-            bot_settings = dict(DEFAULT_BOT_SETTINGS)
-            for row in bot_rows:
-                bot_settings[row.setting_key] = row.value_json
+            self._config = RuntimeConfig(
+                guild_settings=guild_settings,
+                guild_prefixes=guild_prefixes,
+                command_enabled=command_enabled,
+                function_enabled=function_enabled,
+                bot_settings=bot_settings,
+            )
+            self._loaded_at = time.monotonic()
+            self.last_loaded_at = datetime.now(timezone.utc)
+            self.last_error = None
+            self.reload_count += 1
+            logger.info("ConfigCache reload success (count=%s)", self.reload_count)
+        except Exception as exc:
+            self.last_error = str(exc)
+            logger.exception("ConfigCache reload failed, keeping previous config")
+            if self._loaded_at == 0.0:
+                self._loaded_at = time.monotonic()
 
-        self._config = RuntimeConfig(
-            guild_prefixes=guild_prefixes,
-            command_enabled=command_enabled,
-            function_enabled=function_enabled,
-            bot_settings=bot_settings,
-        )
-        self._loaded_at = time.monotonic()
-
-    def get_prefix(self, guild_id: int | None) -> str:
+    def get_guild_settings(self, guild_id: int | None) -> GuildRuntimeSettings:
         config = self.get_config()
         if guild_id is None:
-            return DEFAULT_PREFIX
-        return config.guild_prefixes.get(guild_id, DEFAULT_PREFIX)
+            return GuildRuntimeSettings()
+        return config.guild_settings.get(guild_id, GuildRuntimeSettings(prefix=config.guild_prefixes.get(guild_id, DEFAULT_PREFIX)))
+
+    def get_prefix(self, guild_id: int | None) -> str:
+        return self.get_guild_settings(guild_id).prefix
+
+    def get_log_channel_id(self, guild_id: int | None) -> int | None:
+        return self.get_guild_settings(guild_id).log_channel_id
 
     def get_bot_setting(self, key: str, default: Any = None) -> Any:
         config = self.get_config()
@@ -127,6 +170,13 @@ class ConfigCache:
         if global_key in config.function_enabled:
             return config.function_enabled[global_key]
         return True
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "last_loaded_at": self.last_loaded_at.isoformat() if self.last_loaded_at else None,
+            "last_error": self.last_error,
+            "reload_count": self.reload_count,
+        }
 
     @staticmethod
     def _make_command_key(guild_id: int | None, command_type: str, command_name: str) -> str:
