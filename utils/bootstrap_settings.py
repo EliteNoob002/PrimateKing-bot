@@ -39,6 +39,7 @@ class BootstrapSettings:
     bot_id: int
     primary_guild_id: int | None
     panel_api_url: str | None
+    panel_api_token: str | None
     webhook_dev: str | None
     webhook_pk: str | None
     telegram_bot_token: str | None
@@ -70,6 +71,7 @@ def load_bootstrap_settings() -> BootstrapSettings:
         bot_id=int(os.environ["BOT_ID"]),
         primary_guild_id=_env_optional_int("PRIMARY_GUILD_ID"),
         panel_api_url=os.getenv("PANEL_API_URL"),
+        panel_api_token=os.getenv("PANEL_API_TOKEN"),
         webhook_dev=os.getenv("WEBHOOK_DEV"),
         webhook_pk=os.getenv("WEBHOOK_PK"),
         telegram_bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),

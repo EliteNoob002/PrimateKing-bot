@@ -83,7 +83,7 @@ def setup_slash_commands(bot):
         logging.info(f"{author.mention} {author.name} использовал команду sas")
         await interaction.response.send_message(f"{author.mention} соси")
 
-    @bot.tree.command(name="count", description="Узнать сколько раз кто-то был послан на хуй")
+    @bot.tree.command(name="count", description="Узнать сколько раз кто-то был послан нахуй")
     @slash_command_check()
     @app_commands.describe(target="Выберите цель")
     async def count(interaction: discord.Interaction, target: discord.Member):
@@ -131,7 +131,7 @@ def setup_slash_commands(bot):
         embed.set_image(url=target.avatar)
         await interaction.response.send_message(embed=embed)
 
-    @bot.tree.command(name="poslat", description="Можно послать кого то на хуй")
+    @bot.tree.command(name="poslat", description="Можно послать кого то нахуй")
     @slash_command_check()
     @app_commands.describe(target="Выберите цель")
     async def poslat(interaction: discord.Interaction, target: discord.Member):

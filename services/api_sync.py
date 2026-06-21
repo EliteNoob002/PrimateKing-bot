@@ -24,12 +24,43 @@ def get_panel_api_url() -> str | None:
     return settings.panel_api_url
 
 
+def _panel_request_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    settings = load_bootstrap_settings()
+    token = settings.panel_api_token
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def _normalize_command_name(cmd_type: str, name: str) -> str:
     if cmd_type == "prefix":
         return name.lstrip("$")
     if cmd_type == "function":
         return name.removeprefix("func_")
     return name
+
+
+def _to_panel_sync_item(cmd: dict) -> dict:
+    cmd_type = cmd["type"]
+    name = cmd["name"]
+    if cmd_type == "slash":
+        name = name.lstrip("/")
+    elif cmd_type == "prefix":
+        name = name.lstrip("$")
+    elif cmd_type == "function":
+        name = name.removeprefix("func_")
+
+    item = {
+        "type": cmd_type,
+        "name": name,
+    }
+    description = (cmd.get("description") or "").strip()
+    if description:
+        item["description"] = description
+    if cmd.get("enabled") is not None:
+        item["enabled"] = cmd["enabled"]
+    return item
 
 
 def _discover_function_names_from_decorator() -> set[str]:
@@ -226,69 +257,40 @@ def upsert_settings_to_mysql(commands_list: list[dict], guild_id: int | None = N
     logging.info("MySQL: upsert %d command/function settings", len(commands_list))
 
 
-def _fetch_panel_commands(api_base: str) -> list[dict]:
-    """GET /commands из OpenAPI панели (пагинация)."""
-    headers = {"Content-Type": "application/json"}
-    items: list[dict] = []
-    page = 1
-    page_size = 100
-
-    while True:
-        url = f"{api_base.rstrip('/')}/commands"
-        resp = requests.get(
-            url,
-            params={"page": page, "page_size": page_size},
-            headers=headers,
-            timeout=10,
+def sync_catalog_to_panel(api_base: str, commands_list: list[dict]) -> None:
+    """Регистрирует и обновляет каталог команд в панели (POST /commands/sync)."""
+    settings = load_bootstrap_settings()
+    if not settings.panel_api_token:
+        logging.warning(
+            "PANEL_API_TOKEN не задан — синхронизация каталога с панелью пропущена "
+            "(нужен тот же секрет, что BOT_API_TOKEN на backend панели)."
         )
-        resp.raise_for_status()
-        data = resp.json()
-        batch = data.get("items", [])
-        items.extend(batch)
-
-        total_pages = data.get("total_pages", 1)
-        if page >= total_pages:
-            break
-        page += 1
-
-    return items
-
-
-def sync_descriptions_to_panel(api_base: str, commands_list: list[dict]) -> None:
-    """Обновляет description в панели для существующих команд (PATCH /commands/{id})."""
-    try:
-        panel_items = _fetch_panel_commands(api_base)
-    except Exception as e:
-        logging.warning("Панель %s/commands недоступна: %s", api_base, e)
         return
 
-    panel_by_key = {(item["type"], item["name"]): item for item in panel_items}
+    payload = {"items": [_to_panel_sync_item(cmd) for cmd in commands_list]}
+    url = f"{api_base.rstrip('/')}/commands/sync"
 
-    for cmd in commands_list:
-        key = (cmd["type"], cmd["name"])
-        panel_item = panel_by_key.get(key)
-        if not panel_item:
-            continue
-
-        new_desc = cmd.get("description", "")
-        old_desc = panel_item.get("description") or ""
-        if new_desc and new_desc != old_desc:
-            cmd_id = panel_item["id"]
-            try:
-                resp = requests.patch(
-                    f"{api_base.rstrip('/')}/commands/{cmd_id}",
-                    json={"description": new_desc},
-                    headers={"Content-Type": "application/json"},
-                    timeout=10,
-                )
-                resp.raise_for_status()
-                logging.debug("Обновлено описание команды %s в панели", key)
-            except Exception as e:
-                logging.warning("Не удалось обновить описание %s: %s", key, e)
+    try:
+        resp = requests.post(
+            url,
+            json=payload,
+            headers=_panel_request_headers(),
+            timeout=30,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        logging.info(
+            "Панель /commands/sync: total=%s created=%s updated=%s",
+            result.get("total"),
+            result.get("created"),
+            result.get("updated"),
+        )
+    except Exception as e:
+        logging.warning("Панель %s недоступна: %s", url, e)
 
 
 def send_commands_to_api(bot) -> None:
-    """Синхронизирует команды: MySQL upsert + опционально панель OpenAPI."""
+    """Синхронизирует команды: MySQL upsert + каталог панели через OpenAPI."""
     try:
         commands_list = parse_commands_and_functions(bot)
     except Exception as e:
@@ -306,5 +308,5 @@ def send_commands_to_api(bot) -> None:
         logging.info("PANEL_API_URL не задан — синхронизация с панелью пропущена.")
         return
 
-    sync_descriptions_to_panel(api_base, commands_list)
+    sync_catalog_to_panel(api_base, commands_list)
     logging.info("Синхронизация команд завершена: %d items", len(commands_list))
