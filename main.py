@@ -35,14 +35,14 @@ class JsonLogFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False)
 
 
+settings = load_bootstrap_settings()
+
 log_dir = Path("logs")
 log_dir.mkdir(exist_ok=True)
 handler = RotatingFileHandler(log_dir / "bot.log", maxBytes=5_000_000, backupCount=3, encoding="utf-8")
 handler.setFormatter(JsonLogFormatter())
-logging.basicConfig(level=logging.INFO, handlers=[handler])
+logging.basicConfig(level=settings.log_level, handlers=[handler])
 logger = logging.getLogger("bot")
-
-settings = load_bootstrap_settings()
 
 setup_proxy()
 
@@ -63,7 +63,7 @@ config_cache = ConfigCache(ttl_seconds=settings.config_cache_ttl_seconds)
 try:
     config_cache.reload()
 except Exception:
-    logger.exception("Initial ConfigCache reload failed")
+    logger.exception("ConfigCache: начальная перезагрузка не удалась")
 bot.config_cache = config_cache
 set_global_config_cache(config_cache)
 

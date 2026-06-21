@@ -119,10 +119,10 @@ class ConfigCache:
             self.last_loaded_at = datetime.now(timezone.utc)
             self.last_error = None
             self.reload_count += 1
-            logger.info("ConfigCache reload success (count=%s)", self.reload_count)
+            logger.debug("ConfigCache: перезагрузка успешна (count=%s)", self.reload_count)
         except Exception as exc:
             self.last_error = str(exc)
-            logger.exception("ConfigCache reload failed, keeping previous config")
+            logger.exception("ConfigCache: не удалось перезагрузить, используется предыдущая конфигурация")
             if self._loaded_at == 0.0:
                 self._loaded_at = time.monotonic()
 

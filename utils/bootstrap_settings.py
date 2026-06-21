@@ -1,5 +1,6 @@
 """Bootstrap-настройки из .env (секреты и параметры запуска)."""
 
+import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -28,6 +29,14 @@ def _env_optional_int(key: str) -> int | None:
     if raw is None or raw.strip() == "":
         return None
     return int(raw)
+
+
+def _env_log_level(key: str, default: str = "INFO") -> int:
+    raw = os.getenv(key, default).strip().upper()
+    level = getattr(logging, raw, None)
+    if not isinstance(level, int):
+        return logging.INFO
+    return level
 
 
 @dataclass(frozen=True)
@@ -59,6 +68,7 @@ class BootstrapSettings:
     discord_proxy_user: str | None
     discord_proxy_pass: str | None
     config_cache_ttl_seconds: int
+    log_level: int
 
 
 @lru_cache(maxsize=1)
@@ -91,4 +101,5 @@ def load_bootstrap_settings() -> BootstrapSettings:
         discord_proxy_user=os.getenv("DISCORD_PROXY_USER"),
         discord_proxy_pass=os.getenv("DISCORD_PROXY_PASS"),
         config_cache_ttl_seconds=_env_int("CONFIG_CACHE_TTL_SECONDS", 10),
+        log_level=_env_log_level("LOG_LEVEL", "INFO"),
     )
