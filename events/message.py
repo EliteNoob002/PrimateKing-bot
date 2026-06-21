@@ -1,4 +1,5 @@
 """Обработчики событий сообщений"""
+
 import logging
 from datetime import datetime, timezone
 from io import StringIO
@@ -6,11 +7,9 @@ from io import StringIO
 import discord
 
 from models.user import User
-from utils.config import get_config
 from utils.database import get_session
 from utils.decorators import function_enabled_check
 
-GIF_URLS = get_config('gif_urls')
 
 def setup_message_events(bot):
     """Регистрирует события сообщений"""
@@ -18,21 +17,16 @@ def setup_message_events(bot):
     @bot.event
     async def on_message(message):
         """Обработка сообщений с упоминанием 'primateking1488'"""
-        if 'primateking1488' in message.content.lower():
+        if "primateking1488" in message.content.lower():
             with get_session() as session:
                 user = session.query(User).filter(User.id == message.author.id).first()
                 if user is None:
-                    user = User(
-                        id=message.author.id,
-                        name=message.author.name,
-                        count=1,
-                        admin="0"
-                    )
+                    user = User(id=message.author.id, name=message.author.name, count=1, admin="0")
                     session.add(user)
-                    await message.channel.send(f'{message.author.mention} Пошёл нахуй!')
+                    await message.channel.send(f"{message.author.mention} Пошёл нахуй!")
                 else:
                     user.count += 1
-                    await message.channel.send(f'{message.author.mention} Пошёл нахуй!')
+                    await message.channel.send(f"{message.author.mention} Пошёл нахуй!")
         await bot.process_commands(message)
 
     async def on_message_gifs(message):
@@ -40,17 +34,18 @@ def setup_message_events(bot):
         if message.author == bot.user:
             return
 
-        for gif_url in GIF_URLS:
+        cache = getattr(bot, "config_cache", None)
+        gif_urls = cache.get_bot_setting("gif_urls", []) if cache else []
+
+        for gif_url in gif_urls:
             if gif_url in message.content:
                 await message.reply(gif_url)
                 return
 
         for attachment in message.attachments:
-            if attachment.url.endswith(".gif") and attachment.url in GIF_URLS:
+            if attachment.url.endswith(".gif") and attachment.url in gif_urls:
                 await message.reply(attachment.url)
                 return
-
-        # Не вызываем bot.process_commands здесь, так как он уже вызывается в основном on_message
 
     decorated_on_message = function_enabled_check("on_message_gifs")(on_message_gifs)
     bot.add_listener(decorated_on_message, "on_message")
@@ -73,11 +68,7 @@ def setup_message_events(bot):
         attachments = "\n               ".join([att.url for att in message.attachments]) if message.attachments else "Нет"
         text = message.content or ""
 
-        embed = discord.Embed(
-            title="🗑️ Сообщение удалено",
-            color=discord.Color.red(),
-            timestamp=datetime.now(timezone.utc)
-        )
+        embed = discord.Embed(title="🗑️ Сообщение удалено", color=discord.Color.red(), timestamp=datetime.now(timezone.utc))
         embed.add_field(name="Автор", value=author_info, inline=False)
         embed.add_field(name="Канал", value=channel_info, inline=False)
         embed.add_field(name="Вложения", value=attachments, inline=False)
@@ -123,4 +114,3 @@ def setup_message_events(bot):
                 f"Вложения:     {attachments}\n"
                 f"────────────────────────────────────────────────────────"
             )
-

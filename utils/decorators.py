@@ -1,73 +1,72 @@
 """Декораторы для команд"""
+
 import functools
 import logging
 
-import requests
 from discord import app_commands
 
-from services.telegram import schedule_notify_api_panel_unreachable
-from utils.config import get_config
 
-API_URL = get_config('my_api_url')
+def _get_bot_from_args(*args, **kwargs):
+    if args:
+        first = args[0]
+        if hasattr(first, "client"):
+            return first.client
+        if hasattr(first, "bot"):
+            return first.bot
+        if hasattr(first, "config_cache"):
+            return first
+    return None
+
+
+def _get_guild_id_from_args(*args, **kwargs) -> int | None:
+    if not args:
+        return None
+    first = args[0]
+    guild = getattr(first, "guild", None)
+    if guild is not None:
+        return guild.id
+    return None
+
 
 def function_enabled_check(function_name: str):
-    """Декоратор для проверки, включена ли функция через API"""
+    """Декоратор для проверки, включена ли функция через ConfigCache."""
+
     def decorator(callback):
         @functools.wraps(callback)
         async def wrapper(*args, **kwargs):
-            try:
-                response = requests.get(
-                    f"{API_URL}/bot/commands/function/{function_name}",
-                    timeout=3
-                )
-
-                try:
-                    data = response.json()
-                except ValueError:
-                    logging.error(
-                        f"[Decorator] Некорректный JSON от API для {function_name}: "
-                        f"status={response.status_code}, text={response.text[:200]!r}"
-                    )
-                    return await callback(*args, **kwargs)
-
-                if response.status_code == 200 and not data.get('enabled', True):
-                    return
-
-            except Exception as e:
-                logging.error(f"[Decorator] Ошибка проверки для {function_name}: {e}")
-                schedule_notify_api_panel_unreachable(
-                    "decorator:function",
-                    function_name,
-                    e,
-                    API_URL,
-                )
+            bot = _get_bot_from_args(*args, **kwargs)
+            if bot is None:
                 return await callback(*args, **kwargs)
 
+            cache = getattr(bot, "config_cache", None)
+            if cache is None:
+                return await callback(*args, **kwargs)
+
+            guild_id = _get_guild_id_from_args(*args, **kwargs)
+            if not cache.is_function_enabled(guild_id, function_name):
+                logging.debug("Function %s disabled for guild %s", function_name, guild_id)
+                return
+
             return await callback(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
 def slash_command_check():
-    """Проверка для slash-команд через API"""
-    async def predicate(interaction):
-        command_name = interaction.command.name
-        try:
-            response = requests.get(
-                f"{API_URL}/bot/commands/slash/{command_name}",
-                timeout=3
-            )
-            if response.status_code == 200:
-                return response.json()['enabled']
-            return True
-        except Exception as e:
-            logging.error(f"Slash check error: {e}")
-            schedule_notify_api_panel_unreachable(
-                "decorator:slash",
-                command_name,
-                e,
-                API_URL,
-            )
-            return True
-    return app_commands.check(predicate)
+    """Проверка для slash-команд через ConfigCache."""
 
+    async def predicate(interaction):
+        cache = getattr(interaction.client, "config_cache", None)
+        if cache is None:
+            return True
+
+        guild_id = interaction.guild.id if interaction.guild else None
+        command_name = interaction.command.name
+        enabled = cache.is_command_enabled(guild_id, "slash", command_name)
+        if not enabled:
+            logging.debug("Slash command %s disabled for guild %s", command_name, guild_id)
+        return enabled
+
+    return app_commands.check(predicate)

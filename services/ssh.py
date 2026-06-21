@@ -1,26 +1,33 @@
 """SSH операции"""
+
 import logging
 
 import paramiko
 
-from utils.config import get_config
-
-host_ssh = get_config('host_ssh')
-user_ssh = get_config('user_ssh')
-secret_ssh = get_config('password_ssh')
-port_ssh = get_config('port_ssh')
+from utils.bootstrap_settings import load_bootstrap_settings
 
 client_ssh = paramiko.SSHClient()
 client_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
 
 def get_ssh_client():
     """Возвращает SSH клиент"""
     return client_ssh
 
+
 def execute_ssh_command(command):
     """Выполняет команду по SSH"""
+    settings = load_bootstrap_settings()
+    if not settings.ssh_host or not settings.ssh_user:
+        raise RuntimeError("SSH не настроен: задайте SSH_HOST и SSH_USER в .env")
+
     try:
-        client_ssh.connect(hostname=host_ssh, username=user_ssh, password=secret_ssh, port=port_ssh)
+        client_ssh.connect(
+            hostname=settings.ssh_host,
+            username=settings.ssh_user,
+            password=settings.ssh_password,
+            port=settings.ssh_port,
+        )
         stdin, stdout, stderr = client_ssh.exec_command(command)
         data = stdout.read().decode()
         stdin.close()
@@ -28,4 +35,3 @@ def execute_ssh_command(command):
     except Exception as e:
         logging.error(f"Ошибка выполнения SSH команды: {e}")
         raise
-

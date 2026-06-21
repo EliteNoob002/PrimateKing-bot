@@ -1,4 +1,5 @@
 """Настройка прокси для Discord"""
+
 import asyncio
 import logging
 
@@ -7,23 +8,25 @@ import discord.http as dhttp
 import discord.webhook.async_ as dwh_async
 from aiohttp import BasicAuth
 
-from utils.config import get_config
+from utils.bootstrap_settings import load_bootstrap_settings
 
 proxy = None
 proxy_auth = None
+
 
 def setup_proxy():
     """Настраивает прокси для всех Discord запросов"""
     global proxy, proxy_auth
 
-    if get_config('discord_proxy_enabled'):
-        proxy = get_config('discord_proxy_url')
-        user = get_config('discord_proxy_user')
-        pwd = get_config('discord_proxy_pass')
+    settings = load_bootstrap_settings()
+
+    if settings.discord_proxy_enabled:
+        proxy = settings.discord_proxy_url
+        user = settings.discord_proxy_user
+        pwd = settings.discord_proxy_pass
         if user and pwd and proxy and "@" not in proxy:
             proxy_auth = BasicAuth(user, pwd)
 
-    # --- Форс-прокси для interaction/webhook запросов ---
     _orig_wh_request = dwh_async.AsyncWebhookAdapter.request
 
     async def _proxied_wh_request(self, route, *args, **kwargs):
@@ -35,13 +38,10 @@ def setup_proxy():
 
     dwh_async.AsyncWebhookAdapter.request = _proxied_wh_request
 
-    # --- Принудительный прокси для всех REST-запросов discord.py ---
     _orig_request = dhttp.HTTPClient.request
 
     async def _proxied_request(self, route, **kwargs):
-        kwargs["timeout"] = kwargs.get("timeout") or aiohttp.ClientTimeout(
-            total=70, connect=60, sock_connect=60, sock_read=60
-        )
+        kwargs["timeout"] = kwargs.get("timeout") or aiohttp.ClientTimeout(total=70, connect=60, sock_connect=60, sock_read=60)
 
         if proxy:
             kwargs["proxy"] = proxy
@@ -52,17 +52,23 @@ def setup_proxy():
         last_exc = None
         while attempt < 3:
             attempt += 1
-            logging.debug("REST %s %s proxy=%s attempt=%s",
-                         route.method, route.url, kwargs.get("proxy"), attempt)
+            logging.debug(
+                "REST %s %s proxy=%s attempt=%s",
+                route.method,
+                route.url,
+                kwargs.get("proxy"),
+                attempt,
+            )
             try:
                 return await _orig_request(self, route, **kwargs)
-            except (aiohttp.ClientConnectorError,
-                    aiohttp.ServerDisconnectedError,
-                    asyncio.TimeoutError,
-                    aiohttp.ClientOSError) as e:
+            except (
+                aiohttp.ClientConnectorError,
+                aiohttp.ServerDisconnectedError,
+                asyncio.TimeoutError,
+                aiohttp.ClientOSError,
+            ) as e:
                 last_exc = e
-                logging.error("Discord HTTP error on %s %s: %r",
-                              route.method, route.url, e)
+                logging.error("Discord HTTP error on %s %s: %r", route.method, route.url, e)
                 await asyncio.sleep(min(5 * attempt, 10))
             except Exception:
                 logging.exception("Discord HTTP fatal on %s %s", route.method, route.url)
@@ -71,7 +77,6 @@ def setup_proxy():
 
     dhttp.HTTPClient.request = _proxied_request
 
-    # --- Принудительный прокси для WebSocket-подключений (gateway) ---
     _orig_ws_connect = dhttp.HTTPClient.ws_connect
 
     async def _proxied_ws_connect(self, url, **kwargs):
@@ -99,4 +104,3 @@ def setup_proxy():
 def get_proxy():
     """Возвращает прокси и auth для использования в других модулях"""
     return proxy, proxy_auth
-

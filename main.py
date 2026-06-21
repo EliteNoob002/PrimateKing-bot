@@ -1,4 +1,5 @@
 """Точка входа Discord бота PrimateKing"""
+
 import logging
 
 import discord
@@ -9,17 +10,15 @@ from commands.slash_commands import setup_slash_commands
 from events.errors import setup_error_handlers
 from events.message import setup_message_events
 from events.ready import setup_ready_event
-from utils.config import load_config
+from services.config_cache import ConfigCache, set_global_config_cache
+from services.guild_sync import setup_guild_sync_events
+from utils.bootstrap_settings import load_bootstrap_settings
 from utils.database import init_db
+from utils.prefix import get_prefix
 from utils.proxy import setup_proxy
 
-# Настройка логирования
 logging.basicConfig(
-    level=logging.DEBUG,
-    filename="py_log.log",
-    filemode="w",
-    encoding='utf-8',
-    format="%(asctime)s %(levelname)s %(message)s"
+    level=logging.DEBUG, filename="py_log.log", filemode="w", encoding="utf-8", format="%(asctime)s %(levelname)s %(message)s"
 )
 logging.debug("A DEBUG Message")
 logging.info("An INFO")
@@ -27,35 +26,33 @@ logging.warning("A WARNING")
 logging.error("An ERROR")
 logging.critical("A message of CRITICAL severity")
 
-# Загрузка конфигурации
-config = load_config()
+settings = load_bootstrap_settings()
 
-# Настройка прокси ДО создания бота
 setup_proxy()
 
-# Инициализация базы данных
 init_db()
 
-# Создание бота
-description = '''PrimateKing'''
+description = """PrimateKing"""
 
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(
-    command_prefix=config['prefix'],
-    owner_id=config['admin'],
+    command_prefix=get_prefix,
+    owner_id=settings.discord_owner_id,
     intents=intents,
 )
 
-# Регистрация компонентов
+config_cache = ConfigCache(ttl_seconds=settings.config_cache_ttl_seconds)
+bot.config_cache = config_cache
+set_global_config_cache(config_cache)
+
 setup_slash_commands(bot)
 setup_prefix_commands(bot)
 setup_ready_event(bot)
+setup_guild_sync_events(bot)
 setup_message_events(bot)
 setup_error_handlers(bot)
 
-# Запуск бота
 if __name__ == "__main__":
-    bot.run(config['token'])
-
+    bot.run(settings.discord_token)

@@ -23,6 +23,7 @@ openai>=1.43.0,<2.0.0
 # Работа с БД (SQLAlchemy)
 SQLAlchemy==2.0.23
 pymysql==1.1.0
+alembic==1.14.0
 
 # Изображения (используется в yandexgptart)
 Pillow==10.4.0

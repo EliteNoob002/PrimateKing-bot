@@ -1,4 +1,5 @@
 """Prefix команды бота"""
+
 import random
 
 from discord.ext import commands
@@ -12,8 +13,8 @@ def setup_prefix_commands(bot):
     @bot.command()
     @commands.has_role("Тест1")
     async def teste(ctx, *arg):
-        data = execute_ssh_command('ls -l \n')
-        await ctx.reply(f'Ответ ssh: {data}')
+        data = execute_ssh_command("ls -l \n")
+        await ctx.reply(f"Ответ ssh: {data}")
 
     @bot.command()
     @commands.has_role("Тест2")
@@ -23,9 +24,8 @@ def setup_prefix_commands(bot):
     @bot.command(pass_context=True)
     @commands.is_owner()
     async def say(ctx):
-        await ctx.send('your code...')
+        await ctx.send("your code...")
 
     @bot.command()
     async def testo(ctx, *arg):
         await ctx.reply(random.randint(1000, 2000))
-

@@ -1,4 +1,5 @@
 """Discord UI компоненты"""
+
 import logging
 
 import discord
@@ -9,6 +10,7 @@ from utils.errors import translate_yandex_error
 
 class ImageView(discord.ui.View):
     """View с кнопками для сгенерированных изображений"""
+
     def __init__(self, image_url: str, prompt: str, bot):
         super().__init__(timeout=None)
         self.image_url = image_url
@@ -17,15 +19,11 @@ class ImageView(discord.ui.View):
 
     @discord.ui.button(label="Скачать изображение", style=discord.ButtonStyle.green, custom_id="download_image")
     async def download_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            f"Вы можете скачать изображение по [ссылке]({self.image_url}).", ephemeral=True
-        )
+        await interaction.response.send_message(f"Вы можете скачать изображение по [ссылке]({self.image_url}).", ephemeral=True)
 
     @discord.ui.button(label="Скопировать промт", style=discord.ButtonStyle.blurple, custom_id="copy_prompt")
     async def copy_prompt_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(
-            f"Промт для копирования: `{self.prompt}`", ephemeral=True
-        )
+        await interaction.response.send_message(f"Промт для копирования: `{self.prompt}`", ephemeral=True)
 
     @discord.ui.button(label="Сгенерировать снова", style=discord.ButtonStyle.red, row=1, custom_id="regenerate_image")
     async def regenerate_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -36,7 +34,7 @@ class ImageView(discord.ui.View):
             new_embed = discord.Embed(
                 title="Сгенерированное изображение",
                 description="Вот изображение, созданное на основе вашего запроса:",
-                color=discord.Color.blue()
+                color=discord.Color.blue(),
             )
             new_embed.set_image(url=new_gpt_img)
             new_view = ImageView(new_gpt_img, self.prompt, self.bot)
@@ -46,4 +44,3 @@ class ImageView(discord.ui.View):
             translated = translate_yandex_error(str(e))
             logging.error(f"Ошибка при повторной генерации изображения: {str(e)}")
             await interaction.followup.send(f"❗ {translated}", ephemeral=True)
-

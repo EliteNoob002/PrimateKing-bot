@@ -1,4 +1,5 @@
 """Событие on_ready"""
+
 import asyncio
 import logging
 import socket
@@ -6,8 +7,9 @@ import socket
 import aiohttp
 
 from services.api_sync import send_commands_to_api
+from services.guild_sync import sync_guild_names_from_discord
 from tasks.status_rotation import create_rotate_status_task
-from utils.config import load_config
+from utils.bootstrap_settings import load_bootstrap_settings
 from utils.proxy import get_proxy
 
 
@@ -31,6 +33,7 @@ async def _ensure_http_session(client):
             timeout=default_timeout,
         )
 
+
 async def _post_discord_webhook(url: str, content: str):
     """Отправляет сообщение в Discord webhook"""
     timeout = aiohttp.ClientTimeout(total=8)
@@ -43,40 +46,49 @@ async def _post_discord_webhook(url: str, content: str):
                 kw["proxy_auth"] = proxy_auth
         await s.post(url, json={"content": content}, **kw)
 
+
 def setup_ready_event(bot):
     """Регистрирует событие on_ready"""
 
     @bot.event
     async def on_ready():
         await _ensure_http_session(bot)
-        print(f'Logged in as {bot.user} (ID: {bot.user.id})')
+        print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-        # синхронизация команд
         try:
             synced = await bot.tree.sync()
-            print(f'Synced {len(synced)} command(s)')
+            print(f"Synced {len(synced)} command(s)")
         except Exception as e:
             print(e)
-        print('------')
+        print("------")
 
-        config = load_config()
+        settings = load_bootstrap_settings()
         tasks = []
-        for url in (config.get('webhook_dev'), config.get('webhook_pk')):
+        for url in (settings.webhook_dev, settings.webhook_pk):
             if url:
-                tasks.append(_post_discord_webhook(url, f'Бот {bot.user} запущен'))
+                tasks.append(_post_discord_webhook(url, f"Бот {bot.user} запущен"))
 
         if tasks:
+
             async def _fanout():
                 results = await asyncio.gather(*tasks, return_exceptions=True)
                 for r in results:
                     if isinstance(r, Exception):
                         logging.error("Webhook send failed: %s", r)
+
             asyncio.create_task(_fanout())
 
-        # старт фонового таска статусов
         rotate_status = create_rotate_status_task(bot)
         if not rotate_status.is_running():
             rotate_status.start()
+
+        async def _sync_guilds():
+            try:
+                await asyncio.to_thread(sync_guild_names_from_discord, bot)
+            except Exception:
+                logging.exception("Ошибка синхронизации bot_guild_settings")
+
+        asyncio.create_task(_sync_guilds())
 
         async def _sync_api():
             try:
@@ -84,5 +96,5 @@ def setup_ready_event(bot):
                 await asyncio.to_thread(send_commands_to_api, bot)
             except Exception:
                 logging.exception("Ошибка при синхронизации команд с API")
-        asyncio.create_task(_sync_api())
 
+        asyncio.create_task(_sync_api())

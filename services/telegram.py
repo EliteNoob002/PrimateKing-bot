@@ -1,4 +1,5 @@
 """Уведомления в Telegram"""
+
 import asyncio
 import html
 import logging
@@ -11,7 +12,7 @@ from urllib.parse import quote, urlparse, urlunparse
 
 import requests
 
-from utils.config import get_config
+from utils.bootstrap_settings import load_bootstrap_settings
 from utils.proxy import get_proxy
 
 _CONNECT_TIMEOUT = 5
@@ -23,7 +24,8 @@ _last_api_alert_at: dict[str, float] = {}
 
 
 def _requests_proxies() -> Optional[dict[str, str]]:
-    if not get_config("discord_proxy_enabled"):
+    settings = load_bootstrap_settings()
+    if not settings.discord_proxy_enabled:
         return None
     proxy_url, proxy_auth = get_proxy()
     if not proxy_url:
@@ -36,19 +38,16 @@ def _requests_proxies() -> Optional[dict[str, str]]:
         netloc = f"{user}:{password}@{host}"
         if p.port:
             netloc += f":{p.port}"
-        proxy_for_requests = urlunparse(
-            (p.scheme, netloc, p.path or "", p.params, p.query, p.fragment)
-        )
+        proxy_for_requests = urlunparse((p.scheme, netloc, p.path or "", p.params, p.query, p.fragment))
     else:
         proxy_for_requests = proxy_url
     return {"http": proxy_for_requests, "https": proxy_for_requests}
 
 
 def _tg_credentials_ok() -> bool:
-    token = get_config("tg_bot_token")
-    chat = get_config("tg_chat_id")
-    if not token or not chat:
-        logging.debug("Telegram: пропуск — не заданы tg_bot_token или tg_chat_id")
+    settings = load_bootstrap_settings()
+    if not settings.telegram_bot_token or not settings.telegram_chat_id:
+        logging.debug("Telegram: пропуск — не заданы TELEGRAM_BOT_TOKEN или TELEGRAM_CHAT_ID")
         return False
     return True
 
@@ -57,21 +56,16 @@ def _format_notification_html(title: str, body_lines: list[str]) -> str:
     safe_title = html.escape(title)
     safe_body = "\n".join(html.escape(line) for line in body_lines)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return (
-        f"<b>{safe_title}</b>\n\n"
-        f"{safe_body}\n\n"
-        f"<i>Время: {html.escape(now)}</i>"
-    )
+    return f"<b>{safe_title}</b>\n\n{safe_body}\n\n<i>Время: {html.escape(now)}</i>"
 
 
 def _post_html_message(html_text: str) -> None:
     if not _tg_credentials_ok():
         return
-    token = get_config("tg_bot_token")
-    chat_id = get_config("tg_chat_id")
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    settings = load_bootstrap_settings()
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/sendMessage"
     payload = {
-        "chat_id": chat_id,
+        "chat_id": settings.telegram_chat_id,
         "text": html_text,
         "parse_mode": "HTML",
         "disable_web_page_preview": True,
