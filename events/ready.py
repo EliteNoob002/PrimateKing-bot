@@ -1,12 +1,15 @@
 """Событие on_ready"""
 import asyncio
 import logging
-import aiohttp
 import socket
-from utils.config import load_config
-from utils.proxy import get_proxy
+
+import aiohttp
+
 from services.api_sync import send_commands_to_api
 from tasks.status_rotation import create_rotate_status_task
+from utils.config import load_config
+from utils.proxy import get_proxy
+
 
 async def _ensure_http_session(client):
     """Обеспечивает наличие HTTP сессии с правильными настройками"""
@@ -42,7 +45,7 @@ async def _post_discord_webhook(url: str, content: str):
 
 def setup_ready_event(bot):
     """Регистрирует событие on_ready"""
-    
+
     @bot.event
     async def on_ready():
         await _ensure_http_session(bot)

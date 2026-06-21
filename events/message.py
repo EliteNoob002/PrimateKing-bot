@@ -1,18 +1,20 @@
 """Обработчики событий сообщений"""
-import discord
 import logging
 from datetime import datetime, timezone
 from io import StringIO
-from utils.database import get_session
+
+import discord
+
 from models.user import User
-from utils.decorators import function_enabled_check
 from utils.config import get_config
+from utils.database import get_session
+from utils.decorators import function_enabled_check
 
 GIF_URLS = get_config('gif_urls')
 
 def setup_message_events(bot):
     """Регистрирует события сообщений"""
-    
+
     @bot.event
     async def on_message(message):
         """Обработка сообщений с упоминанием 'primateking1488'"""

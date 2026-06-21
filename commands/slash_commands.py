@@ -1,29 +1,30 @@
 """Slash команды бота"""
-import discord
-from discord import app_commands
-import logging
-import random
-import aiohttp
 import io
+import logging
+import os
+import random
+import re
 import time
 import uuid
-import re
-import os
-from urllib.parse import urlparse
 from typing import Optional
+from urllib.parse import urlparse
 
-from utils.config import load_config
-from utils.decorators import slash_command_check
-from utils.database import get_session
+import aiohttp
+import discord
+import requests
+from discord import app_commands
+
 from models.user import User
+from services.api_sync import API_URL
+from services.ssh import execute_ssh_command
+from services.telegram import await_telegram_notification
 from services.yandex_gpt import yandexgpt
 from services.yandex_gpt_art import generate_and_save_image
-from services.telegram import await_telegram_notification
-from services.ssh import execute_ssh_command
-from services.api_sync import API_URL
-from utils.errors import translate_yandex_error
 from ui.views import ImageView
-import requests
+from utils.config import load_config
+from utils.database import get_session
+from utils.decorators import slash_command_check
+from utils.errors import translate_yandex_error
 
 config = load_config()
 
@@ -39,14 +40,14 @@ async def check_image(url: str) -> bool:
 
 async def send_blin(target_user: discord.User, channel: discord.TextChannel, user: discord.User, text: Optional[str] = None):
     """Отправляет блин с говном"""
-    logging.info(f'Выполнение функции send_blin начато')
+    logging.info('Выполнение функции send_blin начато')
     image_url = None
     try:
         image_url = random.choice(config['pancake_url'])
 
         if not await check_image(image_url):
-            raise ValueError(f"Картинка блина по URL не доступна")
-            
+            raise ValueError("Картинка блина по URL не доступна")
+
         await channel.send(content=f'{target_user.mention}, вам пришёл блин с говном от {user.mention} ')
 
         embed = discord.Embed()
@@ -63,12 +64,12 @@ async def send_blin(target_user: discord.User, channel: discord.TextChannel, use
         else:
             logging.error("Ошибка при выполнении функции send_blin ", exc_info=True)
         raise
-        
-    logging.info(f'Функция send_blin выполнена')
+
+    logging.info('Функция send_blin выполнена')
 
 def setup_slash_commands(bot):
     """Регистрирует все slash команды"""
-    
+
     @bot.tree.command(name="sas", description="Хочешь посасать?")
     @slash_command_check()
     async def sas(interaction: discord.Interaction):
@@ -87,12 +88,12 @@ def setup_slash_commands(bot):
                 user = session.query(User).filter(User.id == member.id).first()
                 if user is None:
                     embed = discord.Embed(
-                        title=(f'Тебя ещё ни разу не посылали нахуй'),
+                        title=('Тебя ещё ни разу не посылали нахуй'),
                         color=0xff0000
                     )
                     embed.set_thumbnail(url=member.avatar)
                     await interaction.response.send_message(embed=embed)
-                else:    
+                else:
                     embed = discord.Embed(
                         title=(f'Тебя послали нахуй {user.count} раз'),
                         color=0xff0000
@@ -101,11 +102,11 @@ def setup_slash_commands(bot):
                     await interaction.response.send_message(embed=embed)
         elif target.id == config['bot_id']:
             embed = discord.Embed(
-                title=(f'Его невозможно послать'),
+                title=('Его невозможно послать'),
                 color=0xff0000
             )
             embed.set_thumbnail(url=target.avatar)
-            await interaction.response.send_message(embed=embed)        
+            await interaction.response.send_message(embed=embed)
         else:
             with get_session() as session:
                 user = session.query(User).filter(User.id == target.id).first()
@@ -131,7 +132,11 @@ def setup_slash_commands(bot):
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду avatar')
         if target is None:
             target = interaction.user
-        embed = discord.Embed(color = 0x22ff00, title = f"Аватар участника - {target.name}", description = f"[Нажмите что бы скачать аватар]({target.avatar})")
+        embed = discord.Embed(
+            color=0x22ff00,
+            title=f"Аватар участника - {target.name}",
+            description=f"[Нажмите что бы скачать аватар]({target.avatar})",
+        )
         embed.set_image(url = target.avatar)
         await interaction.response.send_message(embed = embed)
 
@@ -140,16 +145,16 @@ def setup_slash_commands(bot):
     @app_commands.describe(target='Выберите цель')
     async def poslat(interaction: discord.Interaction, target: discord.Member):
         logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду poslat')
-        target_id = str(target.id)
+        str(target.id)
         target_name = target.name
         if target.id == config['bot_id']:
             embed = discord.Embed(
-                title=(f'Не был послан нахуй'),
+                title=('Не был послан нахуй'),
                 description=f"{interaction.user.mention} себя пошли нахуй",
                 color=0xff0000
             )
             embed.set_thumbnail(url=interaction.user.avatar)
-            await interaction.response.send_message(embed=embed) 
+            await interaction.response.send_message(embed=embed)
         else:
             with get_session() as session:
                 user = session.query(User).filter(User.id == target.id).first()
@@ -165,7 +170,7 @@ def setup_slash_commands(bot):
                                 description=f"{target.mention} тебя послал {interaction.user.mention}",
                                 color=0xff0000)
                     embed.set_thumbnail(url=interaction.user.avatar)
-                    await interaction.response.send_message(embed=embed) 
+                    await interaction.response.send_message(embed=embed)
                 else:
                     user.count += 1
                     embed = discord.Embed(title=f"{target.name} был послан нахуй",
@@ -187,7 +192,7 @@ def setup_slash_commands(bot):
                 f'Эй {interaction.user.mention}! Команда на перезапуск бота отправлена',
                 ephemeral=True
             )
-            data = execute_ssh_command('systemctl restart botdis.service')
+            execute_ssh_command('systemctl restart botdis.service')
         else:
             logging.info(f'{interaction.user.mention} {interaction.user.name} попытался использовать команду restart')
             await await_telegram_notification(
@@ -195,7 +200,7 @@ def setup_slash_commands(bot):
                 title="⚠️ Внимание",
             )
             await interaction.response.send_message(
-                f'У тебя нет доступа к этой команде',
+                'У тебя нет доступа к этой команде',
                 ephemeral=True
             )
 
@@ -226,7 +231,7 @@ def setup_slash_commands(bot):
             )
 
             await interaction.followup.send(
-                f'⛔ У тебя нет доступа к этой команде.',
+                '⛔ У тебя нет доступа к этой команде.',
                 ephemeral=True
             )
 
@@ -262,10 +267,7 @@ def setup_slash_commands(bot):
 
             command_list = []
             for cmd in commands_data:
-                if cmd['type'] == 'slash':
-                    display_name = f"/{cmd['name'].lstrip('/')}"
-                else:
-                    display_name = cmd['name']
+                display_name = f"/{cmd['name'].lstrip('/')}" if cmd['type'] == 'slash' else cmd['name']
 
                 command_list.append(f"{display_name} - {cmd['description']}")
 
@@ -274,7 +276,7 @@ def setup_slash_commands(bot):
                 description="\n".join(command_list) or "Нет доступных команд",
                 color=0x00ff00
             )
-            
+
             await interaction.response.send_message(embed=embed, ephemeral=True)
 
         except Exception as e:
@@ -300,7 +302,7 @@ def setup_slash_commands(bot):
             else:
                 await interaction.followup.send(f'{user.mention} спросил "{user_input}"\n\nОтвет GPT: \n\n{answer}')
         except Exception as e:
-            await interaction.followup.send(f'Произошла ошибка при обращении к функции YandexGPT')
+            await interaction.followup.send('Произошла ошибка при обращении к функции YandexGPT')
             logging.error(f'Произошла ошибка при обращении к функции YandexGPT: {e}')
 
     @bot.tree.command(name="gpt_art", description="Генерация картинки")
@@ -315,11 +317,10 @@ def setup_slash_commands(bot):
             gpt_img_url = await generate_and_save_image(user_input, user)
             logging.info(f"Ссылка на сгенерированное изображение: {gpt_img_url}")
 
-            async with aiohttp.ClientSession() as session:
-                async with session.get(gpt_img_url) as resp:
-                    if resp.status != 200:
-                        raise RuntimeError(f"Не удалось скачать изображение: HTTP {resp.status}")
-                    image_bytes = await resp.read()
+            async with aiohttp.ClientSession() as session, session.get(gpt_img_url) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(f"Не удалось скачать изображение: HTTP {resp.status}")
+                image_bytes = await resp.read()
 
             parsed = urlparse(gpt_img_url)
             basename = os.path.basename(parsed.path)
@@ -351,7 +352,10 @@ def setup_slash_commands(bot):
         except Exception as e:
             translated = translate_yandex_error(str(e))
             await interaction.followup.send(f'❗ {translated}', ephemeral=True)
-            logging.error(f"Ошибка YandexGPT ART: {str(e)}", exc_info=True)
+            if isinstance(e, ValueError):
+                logging.warning("YandexGPT ART: %s", e)
+            else:
+                logging.error("Ошибка YandexGPT ART: %s", e, exc_info=True)
 
     @bot.tree.command(name="send_blin", description="Отправить блин с говном")
     @slash_command_check()
@@ -359,9 +363,15 @@ def setup_slash_commands(bot):
     @app_commands.describe(text='Сообщение под картинкой. Необязательно')
     async def send_message_command(interaction: discord.Interaction, target: discord.User, text: Optional[str] = None):
         if text:
-            logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду send_blin. Цель: {target.mention} {target.name}. Сообщение {text}')
+            logging.info(
+                f"{interaction.user.mention} {interaction.user.name} использовал команду send_blin. "
+                f"Цель: {target.mention} {target.name}. Сообщение {text}"
+            )
         else:
-            logging.info(f'{interaction.user.mention} {interaction.user.name} использовал команду send_blin. Цель: {target.mention} {target.name}')
+            logging.info(
+                f"{interaction.user.mention} {interaction.user.name} использовал команду send_blin. "
+                f"Цель: {target.mention} {target.name}"
+            )
         channel = interaction.channel
         user = interaction.user
 
@@ -371,8 +381,8 @@ def setup_slash_commands(bot):
         except ValueError as e:
             await interaction.response.send_message(f'Ошибка: {e}', ephemeral=True)
         except Exception as e:
-            await interaction.response.send_message(f'Произошла ошибка при отправке блина', ephemeral=True)
+            await interaction.response.send_message('Произошла ошибка при отправке блина', ephemeral=True)
             logging.error(f'Произошла ошибка: {e}')
 
-        logging.info(f'Комманда send_blin выполнена')
+        logging.info('Комманда send_blin выполнена')
 

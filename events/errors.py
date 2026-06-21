@@ -1,17 +1,20 @@
 """Обработчики ошибок"""
 import logging
+
 import discord
+import requests
 from discord import app_commands
 from discord.ext import commands
-import requests
+
 from services.api_sync import API_URL
 from services.telegram import schedule_notify_api_panel_unreachable
+
 
 def setup_error_handlers(bot):
     """Регистрирует обработчики ошибок"""
     # Хранилище для отслеживания уже отправленных сообщений об ошибках
     sent_error_messages = set()
-    
+
     @bot.check
     async def global_command_check(ctx: commands.Context):
         """Глобальная проверка для prefix команд"""
@@ -39,7 +42,7 @@ def setup_error_handlers(bot):
                 API_URL,
             )
             return True
-    
+
     @bot.event
     async def on_command_error(ctx: commands.Context, error: commands.CommandError):
         """Обработка ошибок prefix команд"""

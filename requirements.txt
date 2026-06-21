@@ -29,3 +29,6 @@ Pillow==10.4.0
 
 # Прочее
 loguru==0.7.2
+
+# Dev / lint
+ruff==0.11.12

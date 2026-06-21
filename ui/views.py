@@ -1,7 +1,11 @@
 """Discord UI компоненты"""
-import discord
 import logging
+
+import discord
+
 import services.yandex_gpt_art as yandexgptart
+from utils.errors import translate_yandex_error
+
 
 class ImageView(discord.ui.View):
     """View с кнопками для сгенерированных изображений"""
@@ -39,6 +43,7 @@ class ImageView(discord.ui.View):
             await interaction.followup.send(embed=new_embed, view=new_view)
             self.bot.add_view(new_view)
         except Exception as e:
+            translated = translate_yandex_error(str(e))
             logging.error(f"Ошибка при повторной генерации изображения: {str(e)}")
-            await interaction.followup.send(f"Произошла ошибка: {str(e)}", ephemeral=True)
+            await interaction.followup.send(f"❗ {translated}", ephemeral=True)
 

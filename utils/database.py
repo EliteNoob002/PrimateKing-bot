@@ -1,9 +1,11 @@
 """Подключение к базе данных через SQLAlchemy"""
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from urllib.parse import quote_plus
+
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
 from utils.config import get_config
 
 # Базовый класс для моделей
@@ -16,15 +18,15 @@ def create_database_engine():
     database = get_config('database')
     user = get_config('user_db')
     password = get_config('password_db')
-    
+
     # Экранируем специальные символы в пароле и других параметрах для URL
     user_escaped = quote_plus(str(user))
     password_escaped = quote_plus(str(password))
     host_escaped = quote_plus(str(host))
     database_escaped = quote_plus(str(database))
-    
+
     connection_string = f"mysql+pymysql://{user_escaped}:{password_escaped}@{host_escaped}/{database_escaped}?charset=utf8mb4"
-    
+
     engine = create_engine(
         connection_string,
         pool_size=5,
@@ -33,7 +35,7 @@ def create_database_engine():
         pool_recycle=3600,   # Переподключение через час
         echo=False
     )
-    
+
     return engine
 
 # Глобальный engine
@@ -78,5 +80,4 @@ def get_session_sync():
 # Инициализация моделей
 def init_db():
     """Инициализирует таблицы в базе данных"""
-    from models.user import User  # Импортируем модели
     Base.metadata.create_all(bind=get_engine())

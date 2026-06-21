@@ -1,11 +1,12 @@
 """Настройка прокси для Discord"""
-import aiohttp
 import asyncio
 import logging
+
+import aiohttp
 import discord.http as dhttp
-from aiohttp import BasicAuth
-from aiohttp import ClientConnectionError
 import discord.webhook.async_ as dwh_async
+from aiohttp import BasicAuth
+
 from utils.config import get_config
 
 proxy = None
@@ -14,14 +15,14 @@ proxy_auth = None
 def setup_proxy():
     """Настраивает прокси для всех Discord запросов"""
     global proxy, proxy_auth
-    
+
     if get_config('discord_proxy_enabled'):
         proxy = get_config('discord_proxy_url')
         user = get_config('discord_proxy_user')
         pwd = get_config('discord_proxy_pass')
         if user and pwd and proxy and "@" not in proxy:
             proxy_auth = BasicAuth(user, pwd)
-    
+
     # --- Форс-прокси для interaction/webhook запросов ---
     _orig_wh_request = dwh_async.AsyncWebhookAdapter.request
 

@@ -1,6 +1,7 @@
 """Конфигурация бота"""
-import yaml
 from pathlib import Path
+
+import yaml
 
 CONFIG_PATH = Path(__file__).parent.parent / "config.yaml"
 

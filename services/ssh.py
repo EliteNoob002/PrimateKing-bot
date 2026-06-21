@@ -1,6 +1,8 @@
 """SSH операции"""
-import paramiko
 import logging
+
+import paramiko
+
 from utils.config import get_config
 
 host_ssh = get_config('host_ssh')

@@ -1,9 +1,11 @@
 """Синхронизация команд с API"""
-import requests
-import logging
 import inspect
+import logging
+
 import discord
+import requests
 from discord.ext import commands
+
 from utils.config import get_config
 
 API_URL = get_config('my_api_url')
@@ -14,7 +16,7 @@ def get_commands_from_api():
         url = f"{API_URL}/bot/items"
         response = requests.get(url)
         response.raise_for_status()
-        
+
         commands_dict = {}
         for item in response.json():
             clean_name = item['name']
@@ -22,7 +24,7 @@ def get_commands_from_api():
                 clean_name = clean_name.lstrip('$')
             elif item['type'] == 'function':
                 clean_name = clean_name.removeprefix('func_')
-            
+
             commands_dict[(item['type'], clean_name)] = {
                 'status': item.get('enabled', False),
                 'description': item.get('description', '')
@@ -39,7 +41,7 @@ def parse_commands_and_functions(bot):
         response = requests.get(f"{API_URL}/bot/commands")
         api_data = response.json()
         api_commands = {
-            (item['type'], item['name']): item 
+            (item['type'], item['name']): item
             for item in api_data
         }
     except Exception as e:
@@ -76,12 +78,12 @@ def parse_commands_and_functions(bot):
     # Обработка функций (если есть)
     # Ищем ВСЕ функции во всех модулях проекта, аналогично globals() в оригинале
     # В API они регистрируются с префиксом func_
+    import re
     import sys
     from pathlib import Path
-    import re
-    
+
     project_modules_prefixes = ['commands', 'events', 'services', 'utils', 'models', 'tasks', 'ui']
-    
+
     # Сначала находим функции, которые используются с function_enabled_check в исходном коде
     # Это позволяет найти функции, определенные внутри других функций
     function_names_from_decorator = set()
@@ -94,7 +96,7 @@ def parse_commands_and_functions(bot):
             if file_path.name == '__init__.py':
                 continue
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, encoding='utf-8') as f:
                     content = f.read()
                     # Ищем вызовы function_enabled_check("название_функции")
                     # Исключаем комментарии - ищем только в строках кода
@@ -110,56 +112,64 @@ def parse_commands_and_functions(bot):
                         function_names_from_decorator.update(matches)
             except Exception:
                 continue
-    
+
     # Теперь находим все функции на уровне модулей
     seen_functions = set()
-    
+
     for module_name, module in sys.modules.items():
         if module is None:
             continue
-        
+
         # Пропускаем системные модули и модули не из нашего проекта
-        if not any(module_name.startswith(prefix) for prefix in project_modules_prefixes):
-            if module_name != '__main__':
-                continue
-        
+        if not any(module_name.startswith(prefix) for prefix in project_modules_prefixes) and module_name != '__main__':
+            continue
+
         try:
             # Получаем имя модуля для проверки, что функция определена в этом модуле
             module_file = getattr(module, '__file__', None)
-            if module_file and not any(module_file.startswith(p) for p in [str(Path(__file__).parent.parent), 'commands', 'events', 'services']):
+            project_roots = [str(Path(__file__).parent.parent), 'commands', 'events', 'services']
+            if module_file and not any(module_file.startswith(p) for p in project_roots):
                 # Пропускаем модули, которые не из нашего проекта
                 continue
-                
+
             for func_name, func in inspect.getmembers(module, predicate=lambda x: inspect.isfunction(x) or inspect.iscoroutinefunction(x)):
                 # Пропускаем приватные функции (начинающиеся с _)
                 if func_name.startswith('_'):
                     continue
-                
+
                 # Пропускаем уже обработанные функции
                 if func_name in seen_functions:
                     continue
-                
+
                 # Проверяем, что функция определена в модуле проекта, а не импортирована
                 try:
                     func_module = getattr(func, '__module__', None)
                     if func_module:
                         # Пропускаем функции из стандартных библиотек и внешних пакетов
-                        if func_module.startswith(('sqlalchemy', 'discord', 'yaml', 'paramiko', 'aiohttp', 'requests', 'asyncio', 'inspect', 'logging', 'datetime', 'io', 'urllib', 'json', 'os', 'sys', 'time', 'uuid', 're', 'random', 'typing', 'functools', 'pathlib', 'mysql', 'pymysql')):
+                        stdlib_prefixes = (
+                            'sqlalchemy', 'discord', 'yaml', 'paramiko', 'aiohttp', 'requests',
+                            'asyncio', 'inspect', 'logging', 'datetime', 'io', 'urllib', 'json',
+                            'os', 'sys', 'time', 'uuid', 're', 'random', 'typing', 'functools',
+                            'pathlib', 'mysql', 'pymysql',
+                        )
+                        if func_module.startswith(stdlib_prefixes):
                             continue
                         # Проверяем, что функция определена в модуле проекта
-                        if not any(func_module.startswith(prefix) for prefix in project_modules_prefixes):
-                            if func_module != '__main__':
-                                continue
+                        if (
+                            not any(func_module.startswith(prefix) for prefix in project_modules_prefixes)
+                            and func_module != '__main__'
+                        ):
+                            continue
                 except Exception:
                     pass
-                    
+
                 seen_functions.add(func_name)
-                
+
                 # Убираем префикс 'func_' если он есть в имени функции
                 clean_name = func_name.removeprefix('func_')
                 key = ('function', clean_name)
                 api_entry = api_commands.get(key, {})
-                
+
                 # Получаем описание, ограничиваем длину
                 description = ''
                 if func.__doc__:
@@ -167,7 +177,7 @@ def parse_commands_and_functions(bot):
                     # Ограничиваем длину описания до 500 символов
                     if len(description) > 500:
                         description = description[:500] + '...'
-                
+
                 commands_list.append({
                     'name': f'func_{clean_name}',
                     'type': 'function',
@@ -177,7 +187,7 @@ def parse_commands_and_functions(bot):
         except (AttributeError, ImportError, TypeError):
             # Игнорируем модули, которые не могут быть проверены
             continue
-    
+
     # Добавляем функции, найденные через function_enabled_check, если их ещё нет
     for func_name in function_names_from_decorator:
         if func_name not in seen_functions:

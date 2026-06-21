@@ -1,15 +1,18 @@
 """Ротация статусов бота"""
-import random
 import asyncio
 import logging
+import random
+
 import discord
-from discord.ext import tasks
 from discord import ActivityType, Status
+from discord.ext import tasks
+
 from utils.config import get_config
+
 
 def create_rotate_status_task(bot):
     """Создаёт задачу ротации статуса для конкретного бота"""
-    
+
     @tasks.loop(seconds=None)
     async def rotate_status():
         await bot.wait_until_ready()
@@ -30,10 +33,10 @@ def create_rotate_status_task(bot):
                 status=Status.online,
                 activity=discord.Activity(name=name, type=act_type)
             )
-        except (ConnectionResetError, Exception) as e:
+        except (ConnectionResetError, Exception):
             logging.critical("Потеря соединения при смене статуса", exc_info=True)
 
         await asyncio.sleep(int(get_config('time_sleep')))
-    
+
     return rotate_status
 

@@ -1,7 +1,9 @@
 """Интеграция с Yandex GPT API"""
-import requests
 import json
 import logging
+
+import requests
+
 from utils.config import load_config
 
 config = load_config()
@@ -43,7 +45,7 @@ async def yandexgpt(user_input):
             return answer
         else:
             logging.error(f"Ошибка POST запроса yandexgptapi. Код ошибки: {response.status_code}, Текст: {response.text}")
-            answer = f'Ошибка запроса YandexGPTApi'
+            answer = 'Ошибка запроса YandexGPTApi'
             return answer
 
     except Exception as e:

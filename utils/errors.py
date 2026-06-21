@@ -1,27 +1,31 @@
 """Перевод ошибок Yandex API"""
 import logging
 
+
 def translate_yandex_error(error_msg: str) -> str:
     """Переводит ошибки Yandex API на русский язык"""
     msg_lower = error_msg.lower()
 
     TRANSLATION_KEYS = {
-        ("prompt", "positive", "size", "exceeds", "limit"): 
+        ("prompt", "positive", "size", "exceeds", "limit"):
             "Промт слишком длинный. Сократите описание до 500 символов или менее.",
 
-        ("it", "is", "not", "possible", "to", "generate", "an", "image", "because", "violate"): 
+        ("it", "is", "not", "possible", "to", "generate", "an", "image", "because", "violate"):
             "Промт не прошёл модерацию. Попробуйте переформулировать его.",
 
-        ("internal", "error"): 
+        ("не", "могу", "сгенерировать", "изображение"):
+            "Промт не прошёл модерацию. Попробуйте другую тему.",
+
+        ("internal", "error"):
             "Произошла внутренняя ошибка на стороне сервиса. Попробуйте позже.",
 
-        ("bad", "request"): 
+        ("bad", "request"):
             "Некорректный запрос. Убедитесь, что вы ввели понятный и завершённый текст.",
 
-        ("unauthorized",): 
+        ("unauthorized",):
             "Проблема с авторизацией API. Обратитесь к администратору бота.",
 
-        ("rate", "limit", "exceeded"): 
+        ("rate", "limit", "exceeded"):
             "Превышен лимит запросов к API. Подождите немного и попробуйте снова.",
     }
 

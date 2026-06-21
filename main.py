@@ -1,16 +1,17 @@
 """Точка входа Discord бота PrimateKing"""
 import logging
+
 import discord
 from discord.ext import commands
 
-from utils.config import load_config
-from utils.proxy import setup_proxy
-from utils.database import init_db
-from commands.slash_commands import setup_slash_commands
 from commands.prefix_commands import setup_prefix_commands
-from events.ready import setup_ready_event
-from events.message import setup_message_events
+from commands.slash_commands import setup_slash_commands
 from events.errors import setup_error_handlers
+from events.message import setup_message_events
+from events.ready import setup_ready_event
+from utils.config import load_config
+from utils.database import init_db
+from utils.proxy import setup_proxy
 
 # Настройка логирования
 logging.basicConfig(

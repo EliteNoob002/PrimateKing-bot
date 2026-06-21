@@ -1,14 +1,14 @@
 """Prefix команды бота"""
-import discord
-from discord.ext import commands
 import random
-import logging
+
+from discord.ext import commands
 
 from services.ssh import execute_ssh_command
 
+
 def setup_prefix_commands(bot):
     """Регистрирует все prefix команды"""
-    
+
     @bot.command()
     @commands.has_role("Тест1")
     async def teste(ctx, *arg):
